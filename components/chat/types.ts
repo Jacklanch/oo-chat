@@ -285,6 +285,9 @@ export interface ChatProps {
   onUlwDirectionSave?: (direction: string) => void
   ulwGoal?: string
   ulwDirection?: string
+  /** Connection error for retry functionality */
+  connectionError?: string | null
+  onRetry?: () => void
 }
 
 export interface ChatMessageProps {

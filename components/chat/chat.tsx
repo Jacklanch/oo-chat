@@ -4,6 +4,7 @@ import { useMemo, useCallback, useState } from 'react'
 import { cn } from './utils'
 import { ChatMessages } from './chat-messages'
 import { ChatInput } from './chat-input'
+import { ChatError } from './chat-error'
 import { StatusBar } from './messages'
 import { UlwSetupPanel } from './ulw-setup-panel'
 import { UlwMonitorPanel } from './ulw-monitor-panel'
@@ -36,6 +37,8 @@ export function Chat({
   onUlwDirectionSave,
   ulwGoal = '',
   ulwDirection = '',
+  connectionError,
+  onRetry,
 }: ChatProps) {
   const isUlwActive = mode === 'ulw'
   const [ulwFullscreen, setUlwFullscreen] = useState(false)
@@ -112,7 +115,7 @@ export function Chat({
   const isEmpty = ui.length === 0
 
   return (
-    <div className={cn('flex h-full flex-col bg-white dark:bg-neutral-950', className)}>
+    <div className={cn('flex h-full flex-col bg-white', className)}>
       {isEmpty && isLoading ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
@@ -121,19 +124,30 @@ export function Chat({
           </div>
         </div>
       ) : (
-        <ChatMessages
-          ui={ui}
-          elapsedTime={elapsedTime}
-          isLoading={isLoading}
-          pendingApproval={pendingApproval}
-          onApprovalResponse={onApprovalResponse}
-          pendingAskUser={pendingAskUser}
-          onAskUserResponse={onAskUserResponse}
-          pendingOnboard={pendingOnboard}
-          onOnboardSubmit={onOnboardSubmit}
-          pendingUlwTurnsReached={pendingUlwTurnsReached}
-          onUlwTurnsReachedResponse={onUlwTurnsReachedResponse}
-        />
+        <>
+          {connectionError && (
+            <div className="p-4">
+              <ChatError
+                error={connectionError}
+                onRetry={onRetry}
+                onDismiss={onRetry ? () => onRetry() : undefined}
+              />
+            </div>
+          )}
+          <ChatMessages
+            ui={ui}
+            elapsedTime={elapsedTime}
+            isLoading={isLoading}
+            pendingApproval={pendingApproval}
+            onApprovalResponse={onApprovalResponse}
+            pendingAskUser={pendingAskUser}
+            onAskUserResponse={onAskUserResponse}
+            pendingOnboard={pendingOnboard}
+            onOnboardSubmit={onOnboardSubmit}
+            pendingUlwTurnsReached={pendingUlwTurnsReached}
+            onUlwTurnsReachedResponse={onUlwTurnsReachedResponse}
+          />
+        </>
       )}
       {/* Status bar between messages and input */}
       <StatusBar thinkingItems={thinkingItems} />
