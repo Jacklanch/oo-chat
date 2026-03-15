@@ -9,6 +9,7 @@ import {
   HiOutlinePlus,
   HiOutlineChevronDown,
   HiOutlineChevronRight,
+  HiOutlineCalendar,
 } from 'react-icons/hi'
 import { useChatStore } from '@/store/chat-store'
 import { useAgentInfo } from '@/hooks/use-agent-info'
@@ -43,9 +44,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   // Parse current route to get active agent and session
   const { activeAgent, activeSessionId } = useMemo(() => {
-    // Routes: /[address], /[address]/[sessionId], /settings, /
+    // Routes: /[address], /[address]/[sessionId], /settings, /briefing, /
     const parts = pathname.split('/').filter(Boolean)
-    if (parts[0] === 'settings') {
+    if (parts[0] === 'settings' || parts[0] === 'briefing') {
       return { activeAgent: null, activeSessionId: null }
     }
     if (parts.length >= 1 && agents.includes(parts[0])) {
@@ -80,6 +81,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   }
 
   const isSettingsActive = pathname === '/settings'
+  const isBriefingActive = pathname === '/briefing'
 
   return (
     <>
@@ -236,6 +238,19 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               </div>
             </a>
           )}
+
+          <Link
+            href="/briefing"
+            onClick={onClose}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-sm transition-all duration-200 group ${
+              isBriefingActive
+                ? 'bg-neutral-900 text-white shadow-lg shadow-neutral-200'
+                : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900'
+            }`}
+          >
+            <HiOutlineCalendar className={`w-5 h-5 ${isBriefingActive ? 'text-white' : 'text-neutral-400'}`} />
+            <span>Daily briefing</span>
+          </Link>
 
           <Link
             href="/settings"

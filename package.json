@@ -15,6 +15,7 @@
     "clsx": "^2.1.1",
     "connectonion": "^0.0.15",
     "next": "16.0.10",
+    "node": "^25.8.1",
     "prism-react-renderer": "^2.4.1",
     "react": "19.2.1",
     "react-dom": "19.2.1",
@@ -35,5 +36,13 @@
     "eslint-config-next": "16.0.10",
     "tailwindcss": "^4",
     "typescript": "^5"
-  }
+  },
+  "description": "This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/unsw-cse-comp99-3900/capstone-project-26t1-3900-w18a-date/pull/1"
+  },
+  "author": "",
+  "license": "ISC"
 }

@@ -61,21 +61,22 @@ export function ChatMessages({
     >
       {/* Centered container with max-width matching input */}
       <div className="mx-auto max-w-3xl space-y-1">
-        {ui.map((item) => {
+        {ui.map((item, index) => {
+          const key = `${item.type}-${item.id ?? index}-${index}`
           switch (item.type) {
             case 'user':
-              return <User key={item.id} message={item} />
+              return <User key={key} message={item} />
             case 'agent':
-              return <Agent key={item.id} message={item} />
+              return <Agent key={key} message={item} />
             case 'thinking':
-              return <Thinking key={item.id} thinking={item} isLast={item.id === lastThinkingId} />
+              return <Thinking key={key} thinking={item} isLast={item.id === lastThinkingId} />
             case 'tool_call': {
               // Pass approval info if this tool needs approval
               const needsApproval = item.id === pendingToolId
               const isAskUser = item.id === pendingAskUserToolId
               return (
                 <ToolCall
-                  key={item.id}
+                  key={key}
                   toolCall={item}
                   pendingApproval={needsApproval ? pendingApproval : undefined}
                   onApprovalResponse={needsApproval ? onApprovalResponse : undefined}
@@ -85,7 +86,7 @@ export function ChatMessages({
               )
             }
             case 'ask_user':
-              return <AskUser key={item.id} question={item} />
+              return <AskUser key={key} question={item} />
             case 'approval_needed':
               // Don't render separate approval message - it's shown inline in tool card
               return null
@@ -94,7 +95,7 @@ export function ChatMessages({
               const isPending = pendingOnboard !== null
               return (
                 <OnboardRequired
-                  key={item.id}
+                  key={key}
                   data={item as OnboardRequiredUI}
                   onSubmit={isPending && onOnboardSubmit ? onOnboardSubmit : () => {}}
                   isCompleted={hasOnboardSuccess}
@@ -102,20 +103,20 @@ export function ChatMessages({
               )
             }
             case 'onboard_success':
-              return <OnboardSuccess key={item.id} data={item as OnboardSuccessUI} />
+              return <OnboardSuccess key={key} data={item as OnboardSuccessUI} />
             case 'intent':
-              return <Intent key={item.id} intent={item as IntentUI} />
+              return <Intent key={key} intent={item as IntentUI} />
             case 'eval':
-              return <Eval key={item.id} eval={item as EvalUI} />
+              return <Eval key={key} eval={item as EvalUI} />
             case 'compact':
-              return <Compact key={item.id} compact={item as CompactUI} />
+              return <Compact key={key} compact={item as CompactUI} />
             case 'tool_blocked':
-              return <ToolBlocked key={item.id} data={item as ToolBlockedUI} />
+              return <ToolBlocked key={key} data={item as ToolBlockedUI} />
             case 'ulw_turns_reached': {
               const isPending = pendingUlwTurnsReached !== null
               return isPending && onUlwTurnsReachedResponse ? (
                 <ChatUlwCheckpoint
-                  key={item.id}
+                  key={key}
                   checkpoint={item as UlwTurnsReachedUI}
                   onResponse={onUlwTurnsReachedResponse}
                 />
