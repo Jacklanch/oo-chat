@@ -98,6 +98,54 @@ def do_today() -> str:
     return agent.input(prompt)
 
 
+def _get_calendar_tool():
+    """Get the first configured calendar tool (Google or Microsoft)."""
+    if hasattr(agent.tools, 'googlecalendar'):
+        return agent.tools.googlecalendar
+    if hasattr(agent.tools, 'microsoftcalendar'):
+        return agent.tools.microsoftcalendar
+    return None
+
+
+def do_events(days: int = 7, unconfirmed: bool = False) -> str:
+    """Extract events from recent emails using the /events slash command."""
+    from datetime import datetime, timedelta
+    email = _get_email_tool()
+    if not email:
+        return "No email account connected. Use /link-gmail or /link-outlook to connect."
+
+    cmd = SlashCommand.load("events")
+    if not cmd:
+        return "Command 'events' not found in commands/"
+
+    # Single combined query — Gmail deduplicates results for us
+    since = (datetime.now() - timedelta(days=days)).strftime('%Y/%m/%d')
+    query = (
+        f"after:{since} ("
+        "meeting OR invite OR calendar OR schedule OR appointment OR "
+        "deadline OR \"due date\" OR submission OR cutoff OR "
+        "\"join us\" OR RSVP OR register"
+        ")"
+    )
+    emails_text = email.search_emails(query=query, max_results=25) or "No emails found."
+
+    # Fetch existing calendar events so agent can skip already-added ones
+    existing_events = ""
+    if unconfirmed:
+        cal = _get_calendar_tool()
+        if cal:
+            existing_events = cal.list_events(days_ahead=days) or ""
+
+    prompt = (
+        cmd.prompt
+        .replace("{emails}", emails_text)
+        .replace("{days}", str(days))
+        .replace("{existing_events}", existing_events)
+        .replace("{unconfirmed_only}", "true" if unconfirmed else "false")
+    )
+    return agent.input(prompt)
+
+
 def do_ask(question: str) -> str:
     return agent.input(question)
 

@@ -11,7 +11,7 @@ from rich.markdown import Markdown
 
 from .core import (
     do_inbox, do_search, do_contacts, do_sync,
-    do_init, do_unanswered, do_identity, do_today, do_ask, do_host
+    do_init, do_unanswered, do_identity, do_today, do_events, do_ask, do_host
 )
 from .setup import check_setup
 from .interactive import interactive
@@ -111,6 +111,30 @@ def today():
     with console.status("[bold blue]Fetching and analyzing...[/bold blue]"):
         result = do_today()
     console.print(Panel(Markdown(result), title="[bold blue]Today's Briefing[/bold blue]", border_style="blue"))
+
+
+@app.command()
+def events(
+    days: int = typer.Option(7, "--days", "-d", help="How many days back to scan"),
+    unconfirmed: bool = typer.Option(False, "--unconfirmed", "-u", help="Only show events not already on your calendar"),
+):
+    """Extract events and meetings from recent emails."""
+    console.print(f"[dim]Scanning last {days} days for events...[/dim]")
+    with console.status("[bold blue]Extracting events...[/bold blue]"):
+        result = do_events(days=days, unconfirmed=unconfirmed)
+    console.print(Panel(Markdown(result), title="[bold blue]Extracted Events[/bold blue]", border_style="blue"))
+
+    # Follow-up loop so user can confirm which events to add
+    while True:
+        try:
+            reply = console.input("[bold blue]>[/bold blue] ").strip()
+        except (EOFError, KeyboardInterrupt):
+            break
+        if not reply or reply.lower() in ("q", "quit", "exit", "skip", "no", "none"):
+            break
+        with console.status("[bold blue]Working...[/bold blue]"):
+            followup = do_ask(reply)
+        console.print(Panel(Markdown(followup), title="[bold blue]Agent[/bold blue]", border_style="blue"))
 
 
 @app.command()
