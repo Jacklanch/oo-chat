@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback, useMemo, useRef, useState } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { Chat, useAgentSDK, ModeStatusBar, PlanModeBanner, UlwModeBanner } from '@/components/chat'
 import type { UI, ApprovalMode } from '@/components/chat/types'
@@ -8,6 +8,12 @@ import { ChatLayout } from '@/components/chat-layout'
 import { useChatStore } from '@/store/chat-store'
 import { useIdentity } from '@/hooks/use-identity'
 import { shortAddress } from '@/hooks/use-agent-info'
+
+const SUGGESTIONS = [
+  'I want to create an agent in /tmp folder which is about an agent to clean duplicated files.',
+  'List files in /tmp, current folder, and ~/. Use three separate bash tool calls running in parallel, do NOT combine them into a single command.',
+  'Show system info',
+]
 
 export default function ChatSessionPage() {
   const params = useParams()
@@ -72,11 +78,15 @@ export default function ChatSessionPage() {
   } = useAgentSDK({
     agentAddress: address,
     sessionId,
+    onError: (error) => setConnectionError(error),
   })
 
   // Consume pending message and apply initial mode from URL
   const consumedRef = useRef<string | null>(null)
-  const [sendingInitial, setSendingInitial] = useState(false)
+
+  // Connection error state for retry functionality
+  const [connectionError, setConnectionError] = useState<string | null>(null)
+  const [lastMessage, setLastMessage] = useState<string>('')
 
   useEffect(() => {
     if (consumedRef.current === sessionId) return
@@ -90,8 +100,7 @@ export default function ChatSessionPage() {
     // Then send the pending message
     const pendingMessage = consumePendingMessage()
     if (pendingMessage) {
-      setSendingInitial(true)
-      send(pendingMessage).finally(() => setSendingInitial(false))
+      send(pendingMessage)
     }
   }, [sessionId, initialMode, initialTurns, consumePendingMessage, send, setMode])
 
@@ -119,6 +128,8 @@ export default function ChatSessionPage() {
     if (!conversation) {
       createConversation(sessionId, address)
     }
+    setLastMessage(content)
+    setConnectionError(null)
     await send(content, images)
   }, [conversation, sessionId, address, createConversation, send])
 
@@ -154,9 +165,11 @@ export default function ChatSessionPage() {
         <Chat
           ui={displayUI}
           onSend={handleSend}
-          isLoading={isLoading || sendingInitial}
+          isLoading={isLoading}
           elapsedTime={elapsedTime}
-          suggestions={[]}
+          suggestions={SUGGESTIONS}
+          emptyStateTitle="Welcome to oo-chat"
+          emptyStateDescription={`Talking to ${agentLabel}`}
           pendingAskUser={pendingAskUser}
           onAskUserResponse={respondToAskUser}
           pendingApproval={pendingApproval}
@@ -166,6 +179,8 @@ export default function ChatSessionPage() {
           pendingUlwTurnsReached={pendingUlwTurnsReached}
           onUlwTurnsReachedResponse={respondToUlwTurnsReached}
           statusBar={<ModeStatusBar mode={mode} onModeChange={setMode} disabled={false} ulwTurnsRemaining={ulwTurnsRemaining} />}
+          connectionError={connectionError}
+          onRetry={lastMessage ? () => handleSend(lastMessage) : undefined}
         />
       </div>
     </ChatLayout>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   HiOutlineRefresh,
@@ -16,6 +16,7 @@ import {
   HiOutlinePlus,
   HiOutlineStatusOnline,
   HiOutlineStatusOffline,
+  HiOutlineCalendar,
 } from 'react-icons/hi'
 import { ChatLayout } from '@/components/chat-layout'
 import { useChatStore } from '@/store/chat-store'
@@ -50,6 +51,35 @@ export default function SettingsPage() {
   const [importKeyInput, setImportKeyInput] = useState('')
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [newAgentAddress, setNewAgentAddress] = useState('')
+  const [automationRunning, setAutomationRunning] = useState<boolean | null>(null)
+  const [automationSaving, setAutomationSaving] = useState(false)
+  const [automationError, setAutomationError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/automation/settings')
+      .then((res) => res.ok ? res.json() : Promise.reject(new Error(res.statusText)))
+      .then((data: { running: boolean }) => setAutomationRunning(data.running))
+      .catch(() => setAutomationRunning(false))
+  }, [])
+
+  const handleAutomationToggle = useCallback(async (running: boolean) => {
+    setAutomationSaving(true)
+    setAutomationError(null)
+    try {
+      const res = await fetch('/api/automation/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ running }),
+      })
+      if (!res.ok) throw new Error('Failed to update')
+      const data = (await res.json()) as { running: boolean }
+      setAutomationRunning(data.running)
+    } catch (e) {
+      setAutomationError(e instanceof Error ? e.message : 'Failed to update')
+    } finally {
+      setAutomationSaving(false)
+    }
+  }, [])
 
   const handleImportKey = useCallback(() => {
     if (importKey(importKeyInput)) {
@@ -108,58 +138,106 @@ export default function SettingsPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Balance Card */}
-              <div className="md:col-span-1 bg-neutral-900 rounded-3xl p-8 text-white shadow-2xl shadow-indigo-100 flex flex-col justify-between relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-indigo-500/20 transition-all duration-700" />
+              {/* Left column: Balance + Automation */}
+              <div className="md:col-span-1 flex flex-col gap-4">
+                {/* Balance Card */}
+                <div className="bg-neutral-900 rounded-3xl p-8 text-white shadow-2xl shadow-indigo-100 flex flex-col justify-between relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-indigo-500/20 transition-all duration-700" />
 
-                <div>
-                  <div className="flex items-center justify-between mb-8">
-                    <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest flex items-center gap-2">
-                      <HiOutlineCreditCard className="w-4 h-4" />
-                      Balance
-                    </span>
-                    {authLoading && (
-                      <span className="w-2 h-2 bg-indigo-400 rounded-full animate-ping" />
+                  <div>
+                    <div className="flex items-center justify-between mb-8">
+                      <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest flex items-center gap-2">
+                        <HiOutlineCreditCard className="w-4 h-4" />
+                        Balance
+                      </span>
+                      {authLoading && (
+                        <span className="w-2 h-2 bg-indigo-400 rounded-full animate-ping" />
+                      )}
+                    </div>
+
+                    {authError ? (
+                      <div className="text-red-300 text-xs bg-red-900/30 px-3 py-2 rounded-xl border border-red-800/50">
+                        {authError}
+                      </div>
+                    ) : userProfile ? (
+                      <div className="space-y-1">
+                        <div className="text-4xl font-black tracking-tighter">
+                          ${userProfile.balance_usd.toFixed(4)}
+                        </div>
+                        <div className="text-[10px] text-indigo-300/60 font-medium uppercase tracking-wider">Available Credits</div>
+                      </div>
+                    ) : (
+                      <div className="text-neutral-500 text-sm font-medium italic">Syncing...</div>
                     )}
                   </div>
 
-                  {authError ? (
-                    <div className="text-red-300 text-xs bg-red-900/30 px-3 py-2 rounded-xl border border-red-800/50">
-                      {authError}
-                    </div>
-                  ) : userProfile ? (
-                    <div className="space-y-1">
-                      <div className="text-4xl font-black tracking-tighter">
-                        ${userProfile.balance_usd.toFixed(4)}
+                  <div className="mt-8">
+                    {userProfile && (
+                      <div className="flex items-center gap-6 py-4 border-t border-white/10 text-[11px] text-white/50 font-bold uppercase tracking-wider">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-white/30">Purchased</span>
+                          <span className="text-white">${userProfile.credits_usd.toFixed(2)}</span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-white/30">Spent</span>
+                          <span className="text-white">${userProfile.total_cost_usd.toFixed(2)}</span>
+                        </div>
                       </div>
-                      <div className="text-[10px] text-indigo-300/60 font-medium uppercase tracking-wider">Available Credits</div>
-                    </div>
-                  ) : (
-                    <div className="text-neutral-500 text-sm font-medium italic">Syncing...</div>
-                  )}
+                    )}
+                    <a
+                      href="https://o.openonion.ai/purchase"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-6 block w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-center text-xs font-bold rounded-xl transition-all active:scale-95 shadow-lg shadow-indigo-900/20"
+                    >
+                      + Add Credits
+                    </a>
+                  </div>
                 </div>
 
-                <div className="mt-8">
-                  {userProfile && (
-                    <div className="flex items-center gap-6 py-4 border-t border-white/10 text-[11px] text-white/50 font-bold uppercase tracking-wider">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-white/30">Purchased</span>
-                        <span className="text-white">${userProfile.credits_usd.toFixed(2)}</span>
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-white/30">Spent</span>
-                        <span className="text-white">${userProfile.total_cost_usd.toFixed(2)}</span>
-                      </div>
+                {/* Automation toggle card */}
+                <div className="bg-white rounded-2xl border border-neutral-200/60 shadow-sm p-4 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="p-1.5 bg-amber-50 rounded-lg shrink-0">
+                      <HiOutlineCalendar className="w-4 h-4 text-amber-600" />
                     </div>
-                  )}
-                  <a
-                    href="https://o.openonion.ai/purchase"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-6 block w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-center text-xs font-bold rounded-xl transition-all active:scale-95 shadow-lg shadow-indigo-900/20"
-                  >
-                    + Add Credits
-                  </a>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-neutral-900 truncate">Automation</p>
+                      {automationRunning === null ? (
+                        <p className="text-[10px] text-neutral-400">Loading…</p>
+                      ) : (
+                        <p className="text-[10px] text-neutral-500">
+                          Automate agent workflow
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-2">
+                    {automationError && (
+                      <span className="text-[10px] text-red-500 max-w-[80px] truncate" title={automationError}>{automationError}</span>
+                    )}
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={automationRunning === true}
+                      disabled={automationRunning === null || automationSaving}
+                      onClick={() => handleAutomationToggle(!automationRunning)}
+                      className={`
+                        relative inline-flex h-6 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent
+                        transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2
+                        disabled:opacity-50 disabled:cursor-not-allowed
+                        ${automationRunning ? 'bg-indigo-600' : 'bg-neutral-200'}
+                      `}
+                    >
+                      <span
+                        className={`
+                          pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0
+                          transition duration-200
+                          ${automationRunning ? 'translate-x-4' : 'translate-x-0.5'}
+                        `}
+                      />
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -240,7 +318,7 @@ export default function SettingsPage() {
                           value={importKeyInput}
                           onChange={(e) => setImportKeyInput(e.target.value)}
                           placeholder="Paste your 12-word recovery phrase..."
-                          className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 outline-none font-mono text-sm min-h-[100px] resize-none transition-all"
+                          className="w-full px-4 py-3 rounded-xl border border-neutral-200 bg-white text-neutral-900 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 outline-none font-mono text-sm min-h-[100px] resize-none transition-all placeholder:text-neutral-400"
                         />
                         <div className="flex justify-end gap-3 mt-4">
                           <button
@@ -369,7 +447,7 @@ export default function SettingsPage() {
                   value={newAgentAddress}
                   onChange={(e) => setNewAgentAddress(e.target.value)}
                   placeholder="Paste agent address (0x...)"
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-white border border-neutral-200 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-200/50 outline-none font-mono text-xs transition-all"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-white border border-neutral-200 text-neutral-900 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-200/50 outline-none font-mono text-xs transition-all placeholder:text-neutral-400"
                 />
                 <button
                   type="submit"

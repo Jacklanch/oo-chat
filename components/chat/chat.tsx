@@ -4,17 +4,27 @@ import { useMemo, useCallback, useState } from 'react'
 import { cn } from './utils'
 import { ChatMessages } from './chat-messages'
 import { ChatInput } from './chat-input'
+import { ChatEmptyState } from './chat-empty-state'
 import { StatusBar } from './messages'
 import { UlwSetupPanel } from './ulw-setup-panel'
 import { UlwMonitorPanel } from './ulw-monitor-panel'
 import { UlwFullscreen } from './ulw-fullscreen'
 import type { ChatProps, ThinkingUI, UserUI } from './types'
 
+const DEFAULT_SUGGESTIONS = [
+  'Explain how this works',
+  'Write some example code',
+  'Help me debug an issue',
+]
+
 export function Chat({
   ui = [],
   onSend,
   isLoading = false,
   placeholder = 'Send a message...',
+  emptyStateTitle,
+  emptyStateDescription,
+  suggestions = DEFAULT_SUGGESTIONS,
   elapsedTime = 0,
   pendingAskUser,
   onAskUserResponse,
@@ -36,7 +46,10 @@ export function Chat({
   onUlwDirectionSave,
   ulwGoal = '',
   ulwDirection = '',
+  connectionError,
+  onRetry,
 }: ChatProps) {
+  const isEmpty = ui.length === 0
   const isUlwActive = mode === 'ulw'
   const [ulwFullscreen, setUlwFullscreen] = useState(false)
 
@@ -109,31 +122,41 @@ export function Chat({
     )
   }
 
-  const isEmpty = ui.length === 0
-
   return (
     <div className={cn('flex h-full flex-col bg-white dark:bg-neutral-950', className)}>
-      {isEmpty && isLoading ? (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-neutral-200 border-r-neutral-900 mb-4"></div>
-            <p className="text-sm text-neutral-500">Connecting to agent...</p>
-          </div>
-        </div>
-      ) : (
-        <ChatMessages
-          ui={ui}
-          elapsedTime={elapsedTime}
-          isLoading={isLoading}
-          pendingApproval={pendingApproval}
-          onApprovalResponse={onApprovalResponse}
-          pendingAskUser={pendingAskUser}
-          onAskUserResponse={onAskUserResponse}
-          pendingOnboard={pendingOnboard}
-          onOnboardSubmit={onOnboardSubmit}
-          pendingUlwTurnsReached={pendingUlwTurnsReached}
-          onUlwTurnsReachedResponse={onUlwTurnsReachedResponse}
+      {isEmpty ? (
+        <ChatEmptyState
+          title={emptyStateTitle}
+          description={emptyStateDescription}
+          suggestions={suggestions}
+          onSuggestionClick={onSend}
         />
+
+      ) : (
+        <>
+          {connectionError && (
+            <div className="p-4">
+              <ChatError
+                error={connectionError}
+                onRetry={onRetry}
+                onDismiss={onRetry ? () => onRetry() : undefined}
+              />
+            </div>
+          )}
+          <ChatMessages
+            ui={ui}
+            elapsedTime={elapsedTime}
+            isLoading={isLoading}
+            pendingApproval={pendingApproval}
+            onApprovalResponse={onApprovalResponse}
+            pendingAskUser={pendingAskUser}
+            onAskUserResponse={onAskUserResponse}
+            pendingOnboard={pendingOnboard}
+            onOnboardSubmit={onOnboardSubmit}
+            pendingUlwTurnsReached={pendingUlwTurnsReached}
+            onUlwTurnsReachedResponse={onUlwTurnsReachedResponse}
+          />
+        </>
       )}
       {/* Status bar between messages and input */}
       <StatusBar thinkingItems={thinkingItems} />
