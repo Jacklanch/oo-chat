@@ -27,11 +27,15 @@ Extract all events from the emails and present them clearly. Then offer to creat
 
 ### Step 1: Identify Events
 
-Scan each email for:
-- **Meetings**: video calls, in-person meetings, syncs, standups
-- **Deadlines**: submission dates, due dates, cutoffs
-- **Appointments**: interviews, doctor visits, bookings
-- **Events**: conferences, webinars, social events, parties
+For each email, ask: does this mention a specific date, time, or time reference (e.g. "next Monday", "3pm", "this Friday", "March 17th") that implies something is happening or due? If yes, treat it as an event regardless of what type it is.
+
+Ignore dates that are clearly not actionable — for example:
+- "Sent on March 1st" (email metadata)
+- Newsletter or blog publication dates
+- Historical references ("last year we...")
+- Relative past references ("yesterday's meeting")
+
+Use your own judgement. If a date or time reference implies something the user should show up for, act on, or be aware of, extract it.
 
 {% if unconfirmed_only == "true" %}
 **IMPORTANT**: Skip any event that already appears in the "Already in Calendar" section above.
@@ -58,7 +62,7 @@ Before presenting results, call `write_memory` with:
 
 ### Step 4: Present Events
 
-Use EXACTLY this format:
+You MUST output every extracted event in full before asking for confirmation. Do not summarise or skip any. Use EXACTLY this format:
 
 ## 📅 Extracted Events
 
@@ -69,12 +73,18 @@ Use EXACTLY this format:
 - **Attendees**: [comma-separated emails or "Not specified"]
 - **From**: [Sender Name] — "[Email Subject]"
 
-(repeat for each event)
+### 2. [Event Title]
+- **Date**: ...
+(continue for every event found)
 
 ---
 
-**Found [N] event(s). Should I add any of these to your calendar?**
-List them numbered: "1. [Title] on [Date]" — user can say "add 1,3" or "add all"
+**Found [N] event(s).**
+1. [Title] on [Date]
+2. [Title] on [Date]
+(list all of them)
+
+Should I add any of these to your calendar? You can say "add 1", "add 1,3", or "add all".
 
 ### Step 5: Create Calendar Entries
 

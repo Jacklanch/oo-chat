@@ -110,6 +110,8 @@ def _get_calendar_tool():
 def do_events(days: int = 7, unconfirmed: bool = False) -> str:
     """Extract events from recent emails using the /events slash command."""
     from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    aedt = ZoneInfo("Australia/Sydney")
     email = _get_email_tool()
     if not email:
         return "No email account connected. Use /link-gmail or /link-outlook to connect."
@@ -118,16 +120,27 @@ def do_events(days: int = 7, unconfirmed: bool = False) -> str:
     if not cmd:
         return "Command 'events' not found in commands/"
 
-    # Single combined query — Gmail deduplicates results for us
-    since = (datetime.now() - timedelta(days=days)).strftime('%Y/%m/%d')
+    # Search for date and time references in any common format
+    since = (datetime.now(tz=aedt) - timedelta(days=days)).strftime('%Y/%m/%d')
     query = (
         f"after:{since} ("
-        "meeting OR invite OR calendar OR schedule OR appointment OR "
-        "deadline OR \"due date\" OR submission OR cutoff OR "
-        "\"join us\" OR RSVP OR register"
+        # Numeric date formats: DD/MM/YYYY, MM/DD/YYYY
+        "\"/2025\" OR \"/2026\" OR \"/2027\" OR "
+        # ISO date format: YYYY-MM-DD
+        "\"-01-\" OR \"-02-\" OR \"-03-\" OR \"-04-\" OR \"-05-\" OR \"-06-\" OR "
+        "\"-07-\" OR \"-08-\" OR \"-09-\" OR \"-10-\" OR \"-11-\" OR \"-12-\" OR "
+        # Time formats
+        "\"am\" OR \"pm\" OR \"o'clock\" OR "
+        # Days of the week
+        "Monday OR Tuesday OR Wednesday OR Thursday OR Friday OR Saturday OR Sunday OR "
+        # Month names
+        "January OR February OR March OR April OR May OR June OR "
+        "July OR August OR September OR October OR November OR December OR "
+        # Relative time references
+        "tonight OR tomorrow OR \"next week\" OR \"this week\""
         ")"
     )
-    emails_text = email.search_emails(query=query, max_results=25) or "No emails found."
+    emails_text = email.search_emails(query=query, max_results=50) or "No emails found."
 
     # Fetch existing calendar events so agent can skip already-added ones
     existing_events = ""
