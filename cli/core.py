@@ -104,8 +104,6 @@ def do_today() -> str:
     return _llm_complete(prompt)
 
 
-<<<<<<< Updated upstream
-=======
 def _get_calendar_tool():
     """Get the first configured calendar tool (Google or Microsoft)."""
     if hasattr(agent.tools, 'googlecalendar'):
@@ -265,7 +263,6 @@ def do_create_events(events: list, selection: str) -> str:
     return "\n".join(lines)
 
 
->>>>>>> Stashed changes
 def do_ask(question: str) -> str:
     return agent.input(question)
 

@@ -15,8 +15,4 @@ router = CommandRouter(agent)
 
 # trust="strict" requires signed requests with Ed25519 signature
 # This prevents unauthorized access to email tools
-<<<<<<< Updated upstream
-host(lambda: agent, trust="careful")
-=======
 host(lambda: router, trust="careful")
->>>>>>> Stashed changes
