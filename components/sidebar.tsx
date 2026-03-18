@@ -254,7 +254,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             <span>Daily briefing</span>
           </Link>
 
-                    <Link
+          <Link
             href="/subscriptions"
             onClick={onClose}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-sm transition-all duration-200 group ${
