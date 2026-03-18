@@ -4,6 +4,8 @@ Core logic functions for Email Agent CLI.
 These functions are shared by CLI commands and interactive slash commands.
 """
 
+import os
+
 from connectonion import SlashCommand
 from agent import agent
 
@@ -262,6 +264,32 @@ def do_create_events(events: list, selection: str) -> str:
         return f"No events could be added ({len(skipped)} skipped — missing date/time)."
     return "\n".join(lines)
 
+def do_weekly_summary() -> str:
+    """Run /weekly_summary command using SlashCommand."""
+    from datetime import datetime, timedelta
+    email = _get_email_tool()
+    if not email:
+        return "No email account connected. Use /link-gmail or /link-outlook to connect."
+
+    cmd = SlashCommand.load("weekly_summary")
+    if not cmd:
+        return "Command 'weekly_summary' not found in commands/"
+
+    today = datetime.now()
+    seven_days_ago = today - timedelta(days=7)
+    has_outlook = os.getenv("LINKED_OUTLOOK", "").lower() == "true"
+
+    if has_outlook:
+        date_from = seven_days_ago.strftime('%Y-%m-%d')
+        date_to = today.strftime('%Y-%m-%d')
+        query = f"received:{date_from}..{date_to}"
+    else:
+        query = "newer_than:7d"
+
+    emails = email.search_emails(query=query, max_results=50)
+    today_str = today.strftime('%Y-%m-%d')
+    prompt = cmd.prompt.replace("{emails}", emails).replace("{date}", today_str)
+    return agent.input(prompt)
 
 def do_ask(question: str) -> str:
     return agent.input(question)
@@ -305,6 +333,10 @@ class CommandRouter:
         # --- /today ---
         if text == '/today':
             return do_today()
+
+        # --- /weekly_summary ---
+        if text == '/weekly_summary':
+            return do_weekly_summary()
 
         # --- /events [N] [--unconfirmed|-u] ---
         if text == '/events' or text.startswith('/events '):
