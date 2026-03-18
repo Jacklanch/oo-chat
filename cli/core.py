@@ -334,6 +334,10 @@ class CommandRouter:
         if text == '/today':
             return do_today()
 
+        # --- /weekly_summary ---
+        if text == '/weekly_summary':
+            return do_weekly_summary()
+
         # --- /events [N] [--unconfirmed|-u] ---
         if text == '/events' or text.startswith('/events '):
             parts = text.split()
