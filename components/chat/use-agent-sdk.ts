@@ -53,10 +53,8 @@ interface UseAgentSDKReturn {
   submitOnboard: (options: { inviteCode?: string; payment?: number }) => void
   /** Change approval mode */
   setMode: (mode: ApprovalMode, options?: { turns?: number }) => void
-  /** Check server session status (for reconnect) */
+  /** Check server session status via WebSocket (checks active registry) */
   checkSessionStatus: (sessionId: string) => Promise<string>
-  /** HTTP-based session check — simpler, no relay needed */
-  checkSession: () => Promise<'running' | 'done' | 'not_found'>
   /** Reconnect to existing session to receive pending output */
   reconnect: () => void
   clear: () => void
@@ -140,7 +138,6 @@ export function useAgentSDK(options: UseAgentSDKOptions): UseAgentSDKReturn {
     isProcessing,
     error,
     checkSessionStatus,
-    checkSession: sdkCheckSession,
     mode,
     ulwTurns,
     ulwTurnsUsed,
@@ -172,23 +169,40 @@ export function useAgentSDK(options: UseAgentSDKOptions): UseAgentSDKReturn {
     return () => clearInterval(interval)
   }, [isProcessing])
 
-  // Poll server session status when idle (HTTP-based, no relay fallback)
+  // Poll server session status only after user was just connected (processing → idle)
+  // Don't poll on page load for old sessions — no point checking expired sessions
   const [serverSessionAlive, setServerSessionAlive] = useState(false)
+  const wasProcessingRef = useRef(false)
+  const checkSessionStatusRef = useRef(checkSessionStatus)
+  checkSessionStatusRef.current = checkSessionStatus
+
   useEffect(() => {
     if (isProcessing) {
+      wasProcessingRef.current = true
       setServerSessionAlive(true)
       return
     }
 
+    // Only poll if we were just processing (user had an active session)
+    if (!wasProcessingRef.current) return
+
     let cancelled = false
+    let intervalId: ReturnType<typeof setInterval> | null = null
     const check = async () => {
-      const result = await sdkCheckSession()
-      if (!cancelled) setServerSessionAlive(result === 'running')
+      const result = await checkSessionStatusRef.current(sessionId)
+      if (!cancelled) {
+        const alive = result === 'executing' || result === 'suspended'
+        setServerSessionAlive(alive)
+        if (!alive && intervalId) {
+          clearInterval(intervalId)
+          intervalId = null
+        }
+      }
     }
     check()
-    const interval = setInterval(check, 10000)
-    return () => { cancelled = true; clearInterval(interval) }
-  }, [sdkCheckSession, isProcessing])
+    intervalId = setInterval(check, 10000)
+    return () => { cancelled = true; if (intervalId) clearInterval(intervalId) }
+  }, [sessionId, isProcessing])
 
   // Detect completion (when status changes from working/waiting to idle)
   useEffect(() => {
@@ -298,7 +312,6 @@ export function useAgentSDK(options: UseAgentSDKOptions): UseAgentSDKReturn {
     submitOnboard,
     setMode,
     checkSessionStatus,
-    checkSession: sdkCheckSession,
     reconnect: sdkReconnect,
     clear,
   }
