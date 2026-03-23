@@ -142,6 +142,7 @@ export default function ChatSessionPage() {
 
   // Consume pending message and apply initial mode from URL
   const consumedRef = useRef<string | null>(null)
+  const [sendingInitial, setSendingInitial] = useState(false)
 
   // Connection error state for retry functionality
   const [connectionError, setConnectionError] = useState<string | null>(null)
@@ -232,7 +233,7 @@ export default function ChatSessionPage() {
         <Chat
           ui={displayUI}
           onSend={handleSend}
-          isLoading={isLoading}
+          isLoading={isLoading || sendingInitial}
           elapsedTime={elapsedTime}
           suggestions={SUGGESTIONS}
           slashCommands={SLASH_COMMANDS}
