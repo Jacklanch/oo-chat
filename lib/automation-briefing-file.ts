@@ -1,0 +1,51 @@
+import { join, dirname } from 'path'
+import { readFile, writeFile, mkdir } from 'fs/promises'
+
+const RELATIVE_PATH = join('capstone-project-26t1-3900-w18a-date', 'automation', 'data', 'automation_briefing.json')
+
+/** Paths to automation_briefing.json (same resolution as API routes). */
+export function getBriefingFileCandidates(): string[] {
+  if (process.env.BRIEFING_FILE_PATH) {
+    return [process.env.BRIEFING_FILE_PATH]
+  }
+  const cwd = process.cwd()
+  return [join(cwd, '..', RELATIVE_PATH), join(cwd, RELATIVE_PATH)]
+}
+
+type BriefingJson = Record<string, unknown> & { drafts?: unknown[] }
+
+/** Remove one draft row by draftId (matches Python remove_draft_from_briefing). */
+export async function removeDraftFromBriefingFile(draftId: string, messageId?: string): Promise<boolean> {
+  for (const filePath of getBriefingFileCandidates()) {
+    try {
+      const raw = await readFile(filePath, 'utf-8')
+      const data = JSON.parse(raw) as BriefingJson
+      const drafts = data.drafts
+      if (!Array.isArray(drafts)) continue
+      let removed = false
+      const next = drafts.filter((d) => {
+        if (!d || typeof d !== 'object') return true
+        const row = d as Record<string, unknown>
+        if (draftId && row.draftId === draftId) {
+          removed = true
+          return false
+        }
+        if (!draftId && messageId && row.messageId === messageId) {
+          removed = true
+          return false
+        }
+        return true
+      })
+      if (!removed) continue
+      data.drafts = next
+      await mkdir(dirname(filePath), { recursive: true })
+      await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8')
+      return true
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException)?.code
+      if (code === 'ENOENT') continue
+      throw e
+    }
+  }
+  return false
+}

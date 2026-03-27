@@ -8,26 +8,27 @@
  */
 
 import { NextResponse } from 'next/server'
-import { join } from 'path'
 import { readFile } from 'fs/promises'
+import { getBriefingFileCandidates } from '@/lib/automation-briefing-file'
 
-export interface BriefingPayload {
-  lastRunAt: number
-  briefing: string
-  summary: string
+export interface ReplyDraft {
+  draftId: string
+  messageId: string
+  subject: string
+  from: string
+  draftBody: string
+  /** Original message body only (no From/Subject headers; those are separate fields) */
+  originalEmail?: string
 }
 
-const RELATIVE_PATH = join('capstone-project-26t1-3900-w18a-date', 'automation', 'data', 'automation_briefing.json')
-
-function getCandidatePaths(): string[] {
-  if (process.env.BRIEFING_FILE_PATH) {
-    return [process.env.BRIEFING_FILE_PATH]
-  }
-  const cwd = process.cwd()
-  return [
-    join(cwd, '..', RELATIVE_PATH),  // run from oo-chat
-    join(cwd, RELATIVE_PATH),        // run from repo root (EmailAI)
-  ]
+export interface BriefingPayload {
+  scanSince?: number
+  scanUntil?: number
+  provider?: string
+  messagesSeen?: number
+  briefing: string
+  summary: string
+  drafts?: ReplyDraft[]
 }
 
 export async function GET() {
@@ -47,7 +48,7 @@ export async function GET() {
     }
   }
 
-  const paths = getCandidatePaths()
+  const paths = getBriefingFileCandidates()
   for (const filePath of paths) {
     try {
       const raw = await readFile(filePath, 'utf-8')
@@ -62,7 +63,15 @@ export async function GET() {
   }
 
   return NextResponse.json(
-    { lastRunAt: 0, briefing: '', summary: 'No automation run yet.' },
+    {
+      scanSince: 0,
+      scanUntil: 0,
+      provider: 'none',
+      messagesSeen: 0,
+      briefing: '',
+      summary: 'No automation run yet.',
+      drafts: [],
+    } satisfies BriefingPayload,
     { status: 200 }
   )
 }
