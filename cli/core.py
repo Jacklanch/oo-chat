@@ -89,6 +89,7 @@ def _llm_complete(prompt: str) -> str:
 def do_today() -> str:
     """Run /today command using SlashCommand."""
     from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
     email = _get_email_tool()
     if not email:
         return "No email account connected. Use /link-gmail or /link-outlook to connect."
@@ -98,7 +99,8 @@ def do_today() -> str:
         return "Command 'today' not found in commands/"
 
     # Get today's emails
-    yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y/%m/%d')
+    sydney = ZoneInfo("Australia/Sydney")
+    yesterday = (datetime.now(tz=sydney) - timedelta(days=1)).strftime('%Y/%m/%d')
     emails = email.search_emails(query=f"after:{yesterday}", max_results=50)
 
     # Replace {emails} placeholder in prompt
@@ -131,6 +133,7 @@ def do_events(days: int = 7, unconfirmed: bool = False) -> tuple:
         msg = "No email account connected. Use /link-gmail or /link-outlook to connect."
         return msg, []
 
+    # Search emails from the last N days that likely mention dates/times
     since = (dt.now(tz=aedt) - timedelta(days=days)).strftime('%Y/%m/%d')
     query = (
         f"after:{since} ("
@@ -146,6 +149,7 @@ def do_events(days: int = 7, unconfirmed: bool = False) -> tuple:
     )
     emails_text = email.search_emails(query=query, max_results=50) or "No emails found."
 
+    # If --unconfirmed flag is set, fetch existing calendar events so the LLM can skip them
     existing_events = ""
     if unconfirmed:
         cal = _get_calendar_tool()
@@ -155,6 +159,7 @@ def do_events(days: int = 7, unconfirmed: bool = False) -> tuple:
     today = dt.now(tz=aedt).strftime('%Y-%m-%d')
     existing_block = f"\nAlready on calendar (skip these):\n{existing_events}\n" if existing_events else ""
 
+    # Ask the LLM to extract structured event data from the emails
     extraction_prompt = f"""Extract all upcoming events/meetings from these emails. Today is {today}.
 
 {emails_text}
@@ -176,6 +181,7 @@ Rules:
 - If no events found return []"""
 
     raw = _llm_complete(extraction_prompt).strip()
+    # Strip markdown code fences if the LLM wrapped the JSON in them
     if raw.startswith("```"):
         raw = raw[raw.index("\n") + 1:] if "\n" in raw else raw[3:]
     if raw.endswith("```"):
@@ -189,6 +195,7 @@ Rules:
     if not events:
         return f"No upcoming events found in the last {days} days of emails.", []
 
+    # Build the display text shown to the user
     lines = ["## 📅 Extracted Events\n"]
     for i, ev in enumerate(events, 1):
         lines.append(f"### {i}. {ev.get('title', 'Untitled')}")
@@ -197,6 +204,7 @@ Rules:
         lines.append(f"- **Location**: {ev.get('location') or 'Not specified'}")
         lines.append(f"- **Attendees**: {ev.get('attendees') or 'Not specified'}")
         lines.append("")
+    # Summary list at the bottom so the user can reference events by number when confirming
     lines.append(f"---\n\n**Found {len(events)} event(s).**")
     for i, ev in enumerate(events, 1):
         lines.append(f"{i}. {ev.get('title', 'Untitled')} on {ev.get('date') or 'date unknown'}")
@@ -209,11 +217,13 @@ def do_create_events(events: list, selection: str) -> str:
     """Create calendar events for the given selection string ('add all', 'add 1', 'add 1,3', etc.)."""
     import re
     from datetime import datetime as dt, timedelta
+    from zoneinfo import ZoneInfo
 
     cal = _get_calendar_tool()
     if not cal:
         return "No calendar connected — cannot create events."
 
+    # Parse the user's selection into a list of (index, event) pairs
     sel = selection.lower().strip()
     if "all" in sel:
         selected = list(enumerate(events))
@@ -223,6 +233,40 @@ def do_create_events(events: list, selection: str) -> str:
 
     if not selected:
         return "No events matched your selection."
+
+    # Work out how many days ahead the furthest selected event is,
+    # so we can fetch enough existing calendar events to check for duplicates
+    sydney = ZoneInfo("Australia/Sydney")
+    today = dt.now(tz=sydney).date()
+    max_days_ahead = 0
+    for _, ev in selected:
+        date_str = ev.get("date")
+        if date_str:
+            try:
+                event_date = dt.strptime(date_str, "%Y-%m-%d").date()
+                delta = (event_date - today).days
+                if delta > max_days_ahead:
+                    max_days_ahead = delta
+            except ValueError:
+                pass
+
+    # Fetch existing calendar events for the full date range (up to 100 results)
+    existing_events_text = ""
+    try:
+        existing_events_text = cal.list_events(days_ahead=max_days_ahead + 1, max_results=100) or ""
+    except Exception:
+        existing_events_text = ""
+
+    def _already_exists(title: str, date: str) -> bool:
+        # list_events returns lines like "- 2026-04-15 10:45 AM: Event Title"
+        # so checking for both the date string and title on the same line is enough
+        if not existing_events_text:
+            return False
+        title_lower = title.lower()
+        for line in existing_events_text.splitlines():
+            if date in line and title_lower in line.lower():
+                return True
+        return False
 
     added, skipped = [], []
     for _, ev in selected:
@@ -234,10 +278,17 @@ def do_create_events(events: list, selection: str) -> str:
         attendees = ev.get("attendees") or None
         is_video = bool(ev.get("is_video_call"))
 
+        # Skip events without enough information to create a calendar entry
         if not date or not start_t:
             skipped.append(f"{title} (no date/time)")
             continue
 
+        # Skip events already in the calendar to avoid duplicates
+        if _already_exists(title, date):
+            skipped.append(f"{title} (already in calendar)")
+            continue
+
+        # Default end time to 1 hour after start if not specified
         start_str = f"{date} {start_t}"
         if end_t:
             end_str = f"{date} {end_t}"
@@ -246,6 +297,7 @@ def do_create_events(events: list, selection: str) -> str:
             end_str = end_dt.strftime("%Y-%m-%d %H:%M")
 
         try:
+            # Use create_meet for video calls with attendees, create_event otherwise
             if is_video and attendees:
                 cal.create_meet(title=title, start_time=start_str, end_time=end_str,
                                 attendees=attendees,
@@ -261,12 +313,13 @@ def do_create_events(events: list, selection: str) -> str:
     if skipped:
         lines += ["\n### Skipped:"] + [f"- {s}" for s in skipped]
     if not added:
-        return f"No events could be added ({len(skipped)} skipped — missing date/time)."
+        return f"No events could be added ({len(skipped)} skipped)."
     return "\n".join(lines)
 
 def do_weekly_summary() -> str:
     """Run /weekly_summary command using SlashCommand."""
     from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
     email = _get_email_tool()
     if not email:
         return "No email account connected. Use /link-gmail or /link-outlook to connect."
@@ -275,7 +328,8 @@ def do_weekly_summary() -> str:
     if not cmd:
         return "Command 'weekly_summary' not found in commands/"
 
-    today = datetime.now()
+    sydney = ZoneInfo("Australia/Sydney")
+    today = datetime.now(tz=sydney)
     seven_days_ago = today - timedelta(days=7)
     has_outlook = os.getenv("LINKED_OUTLOOK", "").lower() == "true"
 
@@ -320,23 +374,53 @@ class CommandRouter:
         t = text.lower().strip()
         return bool(re.match(r'^add\b', t))
 
+    def _set_session(self, session, prompt: str, result: str) -> None:
+        """Initialize the underlying agent's current_session after a slash command.
+
+        The connectonion host infrastructure reads agent.current_session after
+        every input() call. When slash commands bypass the agent loop, the session
+        is never created, causing a TypeError. This method builds a minimal but
+        valid session so the library can write to it.
+        """
+        wrapped = object.__getattribute__(self, '_agent')
+        prior_messages = list(session.get('messages', [])) if session else []
+        wrapped.current_session = {
+            'session_id': session.get('session_id') if session else None,
+            'messages': prior_messages + [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": result},
+            ],
+            'trace': list(session.get('trace', [])) if session else [],
+            'turn': (session.get('turn', 0) if session else 0) + 1,
+            'iteration': 0,
+            'result': result,
+            'user_prompt': prompt,
+        }
+
     def input(self, prompt: str, **kwargs):
         import re
         text = prompt.strip()
+        session = kwargs.get('session')
 
         # --- "add 1", "add 1,3", "add all" — follow-up to /events ---
         pending = object.__getattribute__(self, '_pending_events')
         if pending is not None and self._is_add_reply(text):
             object.__setattr__(self, '_pending_events', None)
-            return do_create_events(pending, text)
+            result = do_create_events(pending, text)
+            self._set_session(session, prompt, result)
+            return result
 
         # --- /today ---
         if text == '/today':
-            return do_today()
+            result = do_today()
+            self._set_session(session, prompt, result)
+            return result
 
         # --- /weekly_summary ---
         if text == '/weekly_summary':
-            return do_weekly_summary()
+            result = do_weekly_summary()
+            self._set_session(session, prompt, result)
+            return result
 
         # --- /events [N] [--unconfirmed|-u] ---
         if text == '/events' or text.startswith('/events '):
@@ -345,38 +429,53 @@ class CommandRouter:
             unconfirmed = '--unconfirmed' in parts or '-u' in parts
             display_text, events = do_events(days=days, unconfirmed=unconfirmed)
             object.__setattr__(self, '_pending_events', events if events else None)
+            self._set_session(session, prompt, display_text)
             return display_text
 
         # --- /inbox [N] ---
         if text == '/inbox' or text.startswith('/inbox '):
             parts = text.split()
             count = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 10
-            return do_inbox(count=count)
+            result = do_inbox(count=count)
+            self._set_session(session, prompt, result)
+            return result
 
         # --- /search <query> ---
         if text.startswith('/search '):
             query = text[len('/search '):].strip()
-            return do_search(query=query) if query else "Usage: /search <query>"
+            result = do_search(query=query) if query else "Usage: /search <query>"
+            self._set_session(session, prompt, result)
+            return result
 
         # --- /contacts ---
         if text == '/contacts':
-            return do_contacts()
+            result = do_contacts()
+            self._set_session(session, prompt, result)
+            return result
 
         # --- /sync ---
         if text == '/sync':
-            return do_sync()
+            result = do_sync()
+            self._set_session(session, prompt, result)
+            return result
 
         # --- /init ---
         if text == '/init':
-            return do_init()
+            result = do_init()
+            self._set_session(session, prompt, result)
+            return result
 
         # --- /unanswered ---
         if text == '/unanswered':
-            return do_unanswered()
+            result = do_unanswered()
+            self._set_session(session, prompt, result)
+            return result
 
         # --- /identity ---
         if text == '/identity':
-            return do_identity()
+            result = do_identity()
+            self._set_session(session, prompt, result)
+            return result
 
         # Not a slash command — pass through to the LLM agent
         wrapped = object.__getattribute__(self, '_agent')
