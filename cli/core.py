@@ -134,17 +134,29 @@ def do_events(days: int = 7, unconfirmed: bool = False) -> tuple:
         return msg, []
 
     # Search emails from the last N days that likely mention dates/times
-    since = (dt.now(tz=aedt) - timedelta(days=days)).strftime('%Y/%m/%d')
+    now = dt.now(tz=aedt)
+    since = (now - timedelta(days=days)).strftime('%Y/%m/%d')
+    year_terms = " OR ".join(
+        f'"/{y}" OR "{y}"' for y in range(now.year, now.year + 3)
+    )
     query = (
         f"after:{since} ("
-        "\"/2025\" OR \"/2026\" OR \"/2027\" OR "
-        "\"-01-\" OR \"-02-\" OR \"-03-\" OR \"-04-\" OR \"-05-\" OR \"-06-\" OR "
-        "\"-07-\" OR \"-08-\" OR \"-09-\" OR \"-10-\" OR \"-11-\" OR \"-12-\" OR "
+        f"{year_terms} OR "
+        # Month dates
+        + " OR ".join(f'"-{m:02d}-" OR "/{m:02d}/"' for m in range(1, 13)) + " OR "
+        # Times
+        + " OR ".join(f'"{h}:"' for h in range(24)) + " OR "
         "\"am\" OR \"pm\" OR \"o'clock\" OR "
-        "Monday OR Tuesday OR Wednesday OR Thursday OR Friday OR Saturday OR Sunday OR "
-        "January OR February OR March OR April OR May OR June OR "
-        "July OR August OR September OR October OR November OR December OR "
-        "tonight OR tomorrow OR \"next week\" OR \"this week\""
+        # Day names
+        "Mon OR Tue OR Wed OR Thu OR Fri OR Sat OR Sun OR "
+        # Month names
+        "Jan OR Feb OR Mar OR Apr OR May OR Jun OR Jul OR Aug OR Sep OR Oct OR Nov OR Dec OR "
+        # Relative time references
+        "tonight OR tomorrow OR \"next week\" OR \"this week\" OR \"next month\" OR "
+        # Event-intent keywords
+        "meeting OR invite OR invitation OR appointment OR schedule OR scheduled OR "
+        "deadline OR reminder OR webinar OR zoom OR teams OR \"google meet\" OR "
+        "\"calendar\" OR \"dial-in\" OR \"conference\""
         ")"
     )
     emails_text = email.search_emails(query=query, max_results=50) or "No emails found."
@@ -156,29 +168,37 @@ def do_events(days: int = 7, unconfirmed: bool = False) -> tuple:
         if cal:
             existing_events = cal.list_events(days_ahead=days) or ""
 
-    today = dt.now(tz=aedt).strftime('%Y-%m-%d')
+    today = now.strftime('%Y-%m-%d')
     existing_block = f"\nAlready on calendar (skip these):\n{existing_events}\n" if existing_events else ""
 
     # Ask the LLM to extract structured event data from the emails
-    extraction_prompt = f"""Extract all upcoming events/meetings from these emails. Today is {today}.
-
-{emails_text}
-{existing_block}
-Return ONLY a JSON array (no markdown, no explanation). Each element:
-{{
-  "title": "event name",
-  "date": "YYYY-MM-DD or null",
-  "start_time": "HH:MM (24h) or null",
-  "end_time": "HH:MM (24h) or null",
-  "location": "address, Zoom/Meet link, or null",
-  "attendees": "comma-separated emails or null",
-  "is_video_call": true or false
-}}
-
-Rules:
-- Skip past events (before {today}), newsletter dates, sent/received metadata
-- is_video_call = true when Zoom/Meet/Teams link or "video call" is mentioned
-- If no events found return []"""
+    extraction_prompt = (
+        f"Extract all upcoming events/meetings from these emails. Today is {today}.\n"
+        "\n"
+        f"{emails_text}\n"
+        f"{existing_block}"
+        "Before extracting, judge whether each date/time reference is actually an actionable event and something the user needs to attend, act on, or be present for. "
+        "Include meetings, calls, appointments, deadlines, and scheduled events. "
+        "Exclude email metadata (sent/received dates), newsletter publication dates, "
+        "historical references, promotional expiry dates, and any date that is merely descriptive rather than a commitment.\n"
+        "\n"
+        "Return ONLY a JSON array (no markdown, no explanation). Each element:\n"
+        "{\n"
+        '  "title": "event name",\n'
+        '  "date": "YYYY-MM-DD or null",\n'
+        '  "start_time": "HH:MM (24h) or null",\n'
+        '  "end_time": "HH:MM (24h) or null",\n'
+        '  "location": "address, Zoom/Meet link, or null",\n'
+        '  "attendees": "comma-separated emails or null",\n'
+        '  "is_video_call": true or false,\n'
+        '  "source": "Sender Name — Subject Line or null"\n'
+        "}\n"
+        "\n"
+        "Rules:\n"
+        f"- Skip past events (before {today}), newsletter dates, sent/received metadata\n"
+        "- is_video_call = true when Zoom/Meet/Teams link or \"video call\" is mentioned\n"
+        "- If no events found return []"
+    )
 
     raw = _llm_complete(extraction_prompt).strip()
     # Strip markdown code fences if the LLM wrapped the JSON in them
@@ -203,6 +223,7 @@ Rules:
         lines.append(f"- **Time**: {ev.get('start_time') or 'TBD'}–{ev.get('end_time') or 'TBD'}")
         lines.append(f"- **Location**: {ev.get('location') or 'Not specified'}")
         lines.append(f"- **Attendees**: {ev.get('attendees') or 'Not specified'}")
+        lines.append(f"- **From**: {ev.get('source') or 'Not specified'}")
         lines.append("")
     # Summary list at the bottom so the user can reference events by number when confirming
     lines.append(f"---\n\n**Found {len(events)} event(s).**")
@@ -309,11 +330,13 @@ def do_create_events(events: list, selection: str) -> str:
         except Exception as e:
             skipped.append(f"{title} (error: {e})")
 
-    lines = ["## ✅ Added to Calendar\n"] + added
+    lines = []
+    if added:
+        lines += ["## ✅ Added to Calendar\n"] + added
     if skipped:
         lines += ["\n### Skipped:"] + [f"- {s}" for s in skipped]
     if not added:
-        return f"No events could be added ({len(skipped)} skipped)."
+        lines = ["## No Events Added\n"] + [f"- {s}" for s in skipped]
     return "\n".join(lines)
 
 def do_weekly_summary() -> str:
@@ -404,11 +427,15 @@ class CommandRouter:
 
         # --- "add 1", "add 1,3", "add all" — follow-up to /events ---
         pending = object.__getattribute__(self, '_pending_events')
-        if pending is not None and self._is_add_reply(text):
-            object.__setattr__(self, '_pending_events', None)
-            result = do_create_events(pending, text)
-            self._set_session(session, prompt, result)
-            return result
+        if pending is not None:
+            if self._is_add_reply(text):
+                object.__setattr__(self, '_pending_events', None)
+                result = do_create_events(pending, text)
+                self._set_session(session, prompt, result)
+                return result
+            else:
+                # User moved on — discard stale pending events
+                object.__setattr__(self, '_pending_events', None)
 
         # --- /today ---
         if text == '/today':

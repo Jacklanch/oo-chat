@@ -12,7 +12,8 @@ from connectonion.tui import Chat, CommandItem
 from agent import agent
 from .core import (
     do_inbox, do_search, do_contacts, do_sync,
-    do_init, do_unanswered, do_identity, do_today, do_events,do_weekly_summary
+    do_init, do_unanswered, do_identity, do_today, do_events, do_weekly_summary,
+    CommandRouter,
 )
 from .contacts_provider import ContactProvider
 
@@ -125,9 +126,12 @@ def interactive():
     contact_provider = ContactProvider()
     contacts = contact_provider.to_command_items()
 
+    # Wrap agent so "add X" follow-ups after /events are handled without going to the LLM
+    router = CommandRouter(agent)
+
     # Create chat UI
     chat = Chat(
-        agent=agent,
+        agent=router,
         title="Email Agent",
         triggers={
             "/": COMMANDS,
@@ -152,7 +156,11 @@ def interactive():
         parts = text.split()
         days = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 7
         unconfirmed = "--unconfirmed" in parts or "-u" in parts
-        return do_events(days=days, unconfirmed=unconfirmed)
+        display_text, events = do_events(days=days, unconfirmed=unconfirmed)
+        # Store events on the router so a follow-up "add X" message is handled
+        # by do_create_events rather than forwarded to the LLM agent
+        object.__setattr__(router, '_pending_events', events if events else None)
+        return display_text
 
     chat.command("/events", _events)
 
