@@ -14,6 +14,16 @@ interface ReplyDraft {
   originalEmail?: string
 }
 
+interface MeetingProposal {
+  title?: string
+  date?: string
+  start_time?: string
+  end_time?: string
+  location?: string
+  attendees?: string
+  is_video_call?: boolean
+}
+
 interface BriefingData {
   scanSince?: number
   scanUntil?: number
@@ -22,7 +32,9 @@ interface BriefingData {
   briefing: string
   summary: string
   drafts?: ReplyDraft[]
+  meetings?: MeetingProposal[]
 }
+
 
 type DraftListRow =
   | { kind: 'draft'; draft: ReplyDraft }
@@ -34,6 +46,16 @@ function formatTs(ts: number | undefined) {
     dateStyle: 'medium',
     timeStyle: 'short',
   })
+}
+
+/**
+ * Normalize meeting data to type MeetingProposal[]
+ * @param raw - The raw data to normalize
+ * @returns The normalized meeting data
+ */
+function normalizeMeetings(raw: unknown): MeetingProposal[] {
+  if (!Array.isArray(raw)) return []
+  return raw.filter((x): x is MeetingProposal => x !== null && typeof x === 'object')
 }
 
 export default function BriefingPage() {
@@ -66,7 +88,8 @@ export default function BriefingPage() {
       .then((d: BriefingData) => {
         if (cancelled) return
         const drafts = Array.isArray(d.drafts) ? d.drafts : []
-        setData({ ...d, drafts })
+        const meetings = normalizeMeetings(d.meetings)
+        setData({ ...d, drafts, meetings })
         setDraftRows(drafts.map((x) => ({ kind: 'draft', draft: x })))
         const initial: Record<string, string> = {}
         for (const x of drafts) {
@@ -214,6 +237,31 @@ export default function BriefingPage() {
                   <p>{data.summary}</p>
                 )}
               </div>
+
+              <section className="mb-8">
+                <h2 className="text-lg font-semibold text-neutral-900 mb-3">Proposed Meetings</h2>
+                  {Array.isArray(data.meetings) && data.meetings.length > 0 ? (
+                    <ul className="space-y-4">
+                      {data.meetings.map((m, i) => (
+                        <li
+                          key={i}
+                          className="rounded-2xl border border-neutral-100 bg-white p-6 text-sm text-neutral-800"
+                        >
+                          <p className="font-semibold">{m.title ?? 'Event'}</p>
+                          {m.date && <p>Date: {m.date}</p>}
+                          {m.start_time && m.end_time&& <p>Time: {m.start_time} - {m.end_time}</p>}
+                          {m.start_time && !m.end_time&& <p>Starting Time: {m.start_time}</p>}
+                          {m.end_time && !m.start_time&& <p>Ending Time: {m.end_time}</p>}
+                          {m.location && <p>Location: {m.location}</p>}
+                          {m.attendees && <p>Attendees: {m.attendees}</p>}
+                          {m.is_video_call && <p>Video call</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-neutral-500">No meetings to schedule.</p>
+                  )}
+              </section>
 
               {draftRows.length > 0 && (
                 <section className="mb-8">
