@@ -117,7 +117,7 @@ def _get_calendar_tool():
     return None
 
 
-def do_events(days: int = 7) -> tuple:
+def do_events(days: int = 7, max_emails: int = 50) -> tuple:
     """Extract events from recent emails.
 
     Returns (display_text, events_list).
@@ -159,7 +159,7 @@ def do_events(days: int = 7) -> tuple:
         "\"calendar\" OR \"dial-in\" OR \"conference\""
         ")"
     )
-    emails_text = email.search_emails(query=query, max_results=50) or "No emails found."
+    emails_text = email.search_emails(query=query, max_results=max_emails) or "No emails found."
 
     today = now.strftime('%Y-%m-%d')
     existing_block = ""
@@ -442,11 +442,13 @@ class CommandRouter:
             self._set_session(session, prompt, result)
             return result
 
-        # --- /events [N] ---
+        # --- /events [days] [max_emails] ---
         if text == '/events' or text.startswith('/events '):
             parts = text.split()
-            days = next((int(p) for p in parts[1:] if p.isdigit()), 7)
-            display_text, events = do_events(days=days)
+            digits = [int(p) for p in parts[1:] if p.isdigit()]
+            days = digits[0] if len(digits) > 0 else 7
+            max_emails = digits[1] if len(digits) > 1 else 50
+            display_text, events = do_events(days=days, max_emails=max_emails)
             object.__setattr__(self, '_pending_events', events if events else None)
             self._set_session(session, prompt, display_text)
             return display_text
