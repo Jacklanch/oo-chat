@@ -1,12 +1,17 @@
 /**
  * GET /api/automation/briefing - Latest daily automation result for the frontend.
  *
- * Reads automation_briefing.json via getBriefingFileCandidates() (capstone sibling paths or BRIEFING_FILE_PATH).
+ * Reads automation_briefing.json via getBriefingFileCandidates() (BRIEFING_FILE_PATH, or CAPSTONE_ROOT + relative path, or sibling cwd guesses).
  */
 
 import { NextResponse } from 'next/server'
 import { readFile } from 'fs/promises'
 import { getBriefingFileCandidates } from '@/lib/automation-briefing-file'
+
+export interface BriefingSection {
+  title: string
+  body: string
+}
 
 export interface ReplyDraft {
   draftId: string
@@ -22,9 +27,22 @@ export interface BriefingPayload {
   scanUntil?: number
   provider?: string
   messagesSeen?: number
-  briefing: string
+  briefingSections: BriefingSection[]
   summary: string
   drafts?: ReplyDraft[]
+}
+
+function isBriefingSectionList(v: unknown): v is BriefingSection[] {
+  return (
+    Array.isArray(v) &&
+    v.every(
+      (s) =>
+        s &&
+        typeof s === 'object' &&
+        typeof (s as BriefingSection).title === 'string' &&
+        typeof (s as BriefingSection).body === 'string'
+    )
+  )
 }
 
 export async function GET() {
@@ -32,7 +50,10 @@ export async function GET() {
   for (const filePath of paths) {
     try {
       const raw = await readFile(filePath, 'utf-8')
-      const data = JSON.parse(raw) as BriefingPayload
+      const parsed = JSON.parse(raw) as BriefingPayload & Record<string, unknown>
+      const sections = parsed.briefingSections
+      const briefingSections = isBriefingSectionList(sections) ? sections : []
+      const data: BriefingPayload = { ...parsed, briefingSections }
       return NextResponse.json(data)
     } catch (e) {
       const code = (e as NodeJS.ErrnoException)?.code
@@ -48,7 +69,7 @@ export async function GET() {
       scanUntil: 0,
       provider: 'none',
       messagesSeen: 0,
-      briefing: '',
+      briefingSections: [],
       summary: 'No automation run yet.',
       drafts: [],
     } satisfies BriefingPayload,
