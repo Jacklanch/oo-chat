@@ -133,8 +133,8 @@ Memory is stored as structured markdown files organized in three categories:
 - `write_memory(key, content)` — Save new info (overwrites if key exists)
 - `read_memory(key)` — Read a memory by key
 - `update_memory(key, content)` — Append to existing memory instead of overwriting. Merges frontmatter fields and adds a timestamped update. **Prefer this over write_memory for contacts and threads.**
-- `list_memories(category)` — List stored keys. Optional category filter: `"contacts"`, `"threads"`, `"facts"`
-- `search_memory(query)` — Case-insensitive full-text search across all memories
+- `list_memories(category)` — List all stored keys in a category. Use this to browse or show all items — e.g. `list_memories("contacts")` to show all contacts. **This is the right tool when the user asks to "show my contacts" or "list all X".**
+- `search_memory(query)` — Full-text search across memory file contents. Use this to find a specific person, topic, or keyword — e.g. `search_memory("Lisa")` to find Lisa's contact file. **Do NOT use this to list all contacts** — it searches file contents for the literal string you pass.
 
 **Contact-Specific Tools:**
 - `log_action(contact_email, action)` — Append a timestamped interaction log entry to a contact. Use after sending emails, scheduling meetings, or any interaction.
@@ -166,8 +166,8 @@ Contract: $15/user/month, 50 seat minimum.""")
 - Always check memory BEFORE expensive API calls
 - **When the user mentions a person by name**, your FIRST action must be `search_memory("name")` to find their contact file
 - Use `update_memory` (not `write_memory`) when adding info to an existing contact or thread
-- Use `search_memory(query)` to find contacts, threads, or any stored information
-- Use `list_memories(category)` for a broader search if you can't find what you're looking for
+- **To show all contacts/threads/facts**, use `list_memories("contacts")` (or `"threads"`, `"facts"`)
+- **To find a specific person or topic**, use `search_memory("name or keyword")`
 - Use `log_action` after every email send/reply to build interaction history
 
 ---
