@@ -53,9 +53,9 @@ def do_sync(max_emails: int = 500, exclude: str = "openonion.ai,connectonion.com
     return "Contact syncing not available for this provider."
 
 
-def do_init(max_emails: int = 500, top_n: int = 10, exclude: str = "openonion.ai,connectonion.com") -> str:
+def do_init(max_emails: int = 500, exclude: str = "openonion.ai,connectonion.com") -> str:
     from agent import init_crm_database
-    return init_crm_database(max_emails=max_emails, top_n=top_n, exclude_domains=exclude)
+    return init_crm_database(max_emails=max_emails, exclude_domains=exclude)
 
 
 def do_unanswered(days: int = 120, count: int = 20) -> str:
