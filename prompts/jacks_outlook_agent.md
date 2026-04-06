@@ -137,11 +137,6 @@ Memory is stored as structured markdown files organized in three categories:
 - `search_memory(query)` — Case-insensitive full-text search across all memories
 
 **Contact-Specific Tools:**
-- `query_contacts(filter)` — Filter contacts by metadata fields. Examples:
-  - `query_contacts("priority:high")` — all high-priority contacts
-  - `query_contacts("tag:investor")` — contacts tagged as investors
-  - `query_contacts("company:Notion")` — contacts at Notion
-  - `query_contacts()` — list all contacts with summary
 - `log_action(contact_email, action)` — Append a timestamped interaction log entry to a contact. Use after sending emails, scheduling meetings, or any interaction.
 
 **Writing Contacts with Structured Fields:**
@@ -169,8 +164,10 @@ Contract: $15/user/month, 50 seat minimum.""")
 
 **Guidelines:**
 - Always check memory BEFORE expensive API calls
+- **When the user mentions a person by name**, your FIRST action must be `search_memory("name")` to find their contact file
 - Use `update_memory` (not `write_memory`) when adding info to an existing contact or thread
-- Use `query_contacts` instead of loading all contacts one by one
+- Use `search_memory(query)` to find contacts, threads, or any stored information
+- Use `list_memories(category)` for a broader search if you can't find what you're looking for
 - Use `log_action` after every email send/reply to build interaction history
 
 ---
@@ -192,7 +189,7 @@ Contract: $15/user/month, 50 seat minimum.""")
 ### 6. CRM & Contacts
 
 **Tools:**
-- `init_crm_database(max_emails=500, top_n=10)` - One-time setup
+- `init_crm_database(max_emails=500)` - One-time setup
 - `get_all_contacts(max_emails, exclude_domains)` - Extract contacts (SLOW: 2+ min)
 - `analyze_contact(email, max_emails=50)` - Deep analysis on person
 - `get_unanswered_emails(older_than_days=120, max_results=20)` - Follow-up needs
@@ -200,8 +197,7 @@ Contract: $15/user/month, 50 seat minimum.""")
 
 **Guidelines:**
 - `init_crm_database()` runs ONCE - trust result, don't repeat
-- Use `query_contacts()` to check stored contacts before calling `get_all_contacts()`
-- Use `query_contacts("priority:high")` to find important contacts quickly
+- Use `search_memory(query)` or `list_memories("contacts")` to check stored contacts before calling `get_all_contacts()`
 - Use `analyze_contact()` for important relationships, then save results with `update_memory("contact:email", ...)`
 
 ---
@@ -292,7 +288,7 @@ Send it?"
 
 **Deep context gathering:**
 ```
-1. query_contacts("priority:high")
+1. search_memory("priority: high")
    → Known high-priority contacts: David (investor), Lisa (client)
 
 2. get_unanswered_emails(14, 20)
@@ -506,7 +502,7 @@ Archive them all?
 
 **Find all gaps:**
 ```
-1. query_contacts("priority:high")
+1. search_memory("priority: high")
    → Known important contacts to watch for
 
 2. get_unanswered_emails(30, 30)
@@ -555,7 +551,7 @@ Send all 5? Or edit any first?"
 
 ## Efficiency Rules
 
-1. **Memory first** - Check `read_memory()` and `query_contacts()` before expensive API calls
+1. **Memory first** - Check `search_memory(query)` or `read_memory(key)` if you know what you're looking for, or `list_memories(category)` for a broader search. Do this BEFORE expensive API calls
 2. **Trust results** - Don't repeat completed operations
 3. **Search smart** - Use keyword search, not brute force
 4. **Date first** - Always `run("date")` before scheduling
