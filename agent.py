@@ -6,7 +6,7 @@ Pattern: Use ConnectOnion email tools + Memory system + Calendar + Shell + Plugi
 """
 
 import json
-import os
+import os, time
 from connectonion import Agent, WebFetch, Shell, TodoList
 from memory import Memory
 from connectonion.useful_plugins import re_act, gmail_plugin, calendar_plugin
@@ -63,8 +63,7 @@ else:
 # exclude the expensive API calls from the main agent so it stops calling them like an idiot
 # the CRM init agent gets the full email instance, it can do what it likes
 EXCLUDED_EMAIL_METHODS = {
-    "get_all_contacts", "sync_contacts", "analyze_contact",
-    "get_unanswered_emails", "get_cached_contacts", "update_contact",
+    "get_all_contacts", "sync_contacts", "analyze_contact", "get_cached_contacts", "update_contact",
     "bulk_update_contacts", "detect_all_my_emails", "get_all_my_emails",
     "sync_emails",
 }
@@ -91,6 +90,18 @@ init_crm = Agent(
     log=False  # Don't create separate log file
 )
 
+# Add remaining tools to the list
+tools.extend([read_memory, write_memory, update_memory, search_memory, list_memories, shell, todo, pause_automation, resume_automation, is_automation_running])
+
+# Create main agent
+agent = Agent(
+    name="email-agent",
+    system_prompt=system_prompt,
+    tools=tools,
+    plugins=plugins,
+    max_iterations=15,
+    model="co/gemini-3-flash-preview",
+)
 
 def init_crm_database(max_emails: int = 500, exclude_domains: str = "openonion.ai,connectonion.com") -> str:
     """Initialize CRM database by extracting contacts.
@@ -102,8 +113,11 @@ def init_crm_database(max_emails: int = 500, exclude_domains: str = "openonion.a
     Returns:
         Summary of initialization process including number of contacts analyzed
     """
+
+    start = time.perf_counter()
     from pathlib import Path
     contacts_csv = Path("data/contacts.csv")
+    contacts_dir = Path("data/memory/contacts")
 
     if contacts_csv.exists():
         csv_content = contacts_csv.read_text()
@@ -119,20 +133,44 @@ def init_crm_database(max_emails: int = 500, exclude_domains: str = "openonion.a
             f"IMPORTANT: Use get_all_contacts(max_emails={max_emails}, exclude_domains=\"{exclude_domains}\")\n"
             f"Then use AI judgment to only setup the most useful and important contacts."
         )
-    # Return clear completion message so main agent knows not to call again
-    return f"CRM INITIALIZATION COMPLETE. \n{result}\nContacts saved to memory/contacts, to browse contacts use list_memories('contacts')"
 
+    for contact_file in sorted(contacts_dir.glob("*.md")):
+        email = contact_file.stem
+        agent.input(f"""Enrich the contact file for {email}.
 
-# Add remaining tools to the list
-tools.extend([read_memory, write_memory, update_memory, search_memory, list_memories, shell, todo, init_crm_database, pause_automation, resume_automation, is_automation_running])
+1. read_memory("contact:{email}") — see what's already saved
+2. search_emails("from:{email}", 15) — emails received from them
+3. search_emails("to:{email}", 15) — emails you sent to them
+4. get_email_body() on 2-3 of the most informative ones (skip receipts, calendar invites, one-liners)
+5. update_memory("contact:{email}", ...) with this structure:
+---
+name: <full name>
+company: <their company if known>
+role: <their job title or function if known>
+relationship: <one of: client, colleague, family, friend, contact>
+priority: <high / medium / low — based on email frequency and importance>
+tags: [<relevant keywords>]
+---
 
-# Create main agent
-agent = Agent(
-    name="email-agent",
-    system_prompt=system_prompt,
-    tools=tools,
-    plugins=plugins,
-    max_iterations=15,
-    model="co/gemini-3-flash-preview",
+## About
+2-3 sentences: who they are, how you know them, nature of the relationship.
+
+## Key Topics
+Bullet list of recurring subjects or projects discussed.
+
+## Language
+Brief summary of the tone and language used between this contact and the user
+
+## Thread History
+Dated bullet list of notable interactions (most recent first):
+- YYYY-MM-DD: <what happened>
+
+If there are zero emails from and to this contact, just add a note:
+"No email history found."
+
+Use update_memory (not write_memory) to preserve existing frontmatter fields.
+Only include fields you can actually infer — don't fabricate details."""
 )
-
+    end = time.perf_counter()
+    # Return clear completion message so main agent knows not to call again
+    return f"CRM INITIALIZATION COMPLETE in {end - start:.2f} seconds. \n{result}\nContacts saved to memory/contacts, to browse contacts use list_memories('contacts')"

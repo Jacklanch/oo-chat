@@ -36,11 +36,7 @@ For each contact that passes the filter, call `write_memory` with the contact's 
 write_memory("contact:lisa@example.com", """---
 email: lisa@example.com
 ---
-
-# General Info
-
-# Thread History
-- 
+ 
 """)
 ```
 
