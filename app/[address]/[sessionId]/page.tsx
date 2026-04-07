@@ -61,7 +61,8 @@ const SLASH_COMMANDS = [
   { id: '/unanswered', prefix: '⏳', label: 'Find emails pending your reply' },
   { id: '/contacts',   prefix: '👥', label: 'View your contacts' },
   { id: '/sync',       prefix: '🔄', label: 'Sync contacts from Gmail' },
-  { id: '/init',       prefix: '🗄️', label: 'Initialize CRM database' },
+  { id: '/init',       prefix: '🗄️', label: 'Initialize CRM database (3-5 min)' },
+  { id: '/init-status', prefix: '📊', label: 'Check CRM init progress' },
   { id: '/identity',   prefix: '🆔', label: 'Show your email identity' },
 ]
 
@@ -148,6 +149,11 @@ export default function ChatSessionPage() {
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [lastMessage, setLastMessage] = useState<string>('')
 
+  // Track /init command state for long-running CRM initialization
+  const [isInitRunning, setIsInitRunning] = useState(false)
+  // Confirmation flow before running /init
+  const [pendingInitConfirm, setPendingInitConfirm] = useState(false)
+
   useEffect(() => {
     if (consumedRef.current === sessionId) return
     consumedRef.current = sessionId
@@ -167,12 +173,38 @@ export default function ChatSessionPage() {
   }, [sessionId, initialMode, initialTurns, consumePendingMessage, send, setMode])
 
   // Use stored UI if available, otherwise use hook UI
+  // When /init is running, inject a warning message after the user's command
   const displayUI = useMemo((): UI[] => {
-    if (hookUI.length > 0) {
-      return hookUI as UI[]
+    const raw = hookUI.length > 0 ? (hookUI as UI[]) : (conversation?.ui || [])
+    // Strip stale "running" thinking items when the agent isn't actually processing —
+    // these are leftovers from a session interrupted by navigation
+    const base = isLoading ? raw : raw.filter(
+      item => !(item.type === 'thinking' && 'status' in item && item.status === 'running')
+    )
+    if (!isInitRunning) return base
+
+    // Find the /init user message and inject a warning after it
+    const initIndex = [...base].reverse().findIndex(
+      item => item.type === 'user' && 'content' in item && item.content.trim() === '/init'
+    )
+    if (initIndex === -1) return base
+
+    const insertAt = base.length - initIndex
+    const warning: UI = {
+      id: 'init-warning',
+      type: 'agent',
+      content: '**Initializing CRM database** — this scans your emails and builds contact profiles. It typically takes **3-5 minutes**.\n\nThis runs on the server, so you can navigate away safely. Use **/init-status** to check progress.',
+    } as UI
+
+    return [...base.slice(0, insertAt), warning, ...base.slice(insertAt)]
+  }, [hookUI, conversation?.ui, isInitRunning])
+
+  // Clear init running state once the immediate response arrives
+  useEffect(() => {
+    if (!isLoading && isInitRunning) {
+      setIsInitRunning(false)
     }
-    return conversation?.ui || []
-  }, [hookUI, conversation?.ui])
+  }, [isLoading, isInitRunning])
 
   // Sync UI changes back to store
   useEffect(() => {
@@ -186,14 +218,34 @@ export default function ChatSessionPage() {
     }
   }, [sessionId, hookUI, updateUI, updateTitle])
 
-  const handleSend = useCallback(async (content: string, images?: string[]) => {
+  const handleSend = useCallback((content: string, images?: string[]) => {
+    // Intercept /init to show confirmation first
+    if (content.trim() === '/init') {
+      setPendingInitConfirm(true)
+      return
+    }
     if (!conversation) {
       createConversation(sessionId, address)
     }
     setLastMessage(content)
     setConnectionError(null)
-    await send(content, images)
+    send(content, images)
   }, [conversation, sessionId, address, createConversation, send])
+
+  const handleInitConfirm = useCallback(() => {
+    setPendingInitConfirm(false)
+    if (!conversation) {
+      createConversation(sessionId, address)
+    }
+    setLastMessage('/init')
+    setConnectionError(null)
+    setIsInitRunning(true)
+    send('/init')
+  }, [conversation, sessionId, address, createConversation, send])
+
+  const handleInitCancel = useCallback(() => {
+    setPendingInitConfirm(false)
+  }, [])
 
   const handleReconnect = useCallback(() => {
     setConnectionError(null)
@@ -229,6 +281,38 @@ export default function ChatSessionPage() {
           <UlwModeBanner turnsRemaining={ulwTurnsRemaining} onExit={() => setMode('safe')} />
         )}
 
+        {/* /init confirmation dialog */}
+        {pendingInitConfirm && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+            <div className="mx-4 max-w-md rounded-xl border border-amber-200 bg-white p-6 shadow-lg">
+              <h3 className="text-base font-semibold text-neutral-900 mb-2">Initialize CRM Database</h3>
+              <div className="space-y-3 text-sm text-neutral-600">
+                <p>
+                  This will scan your emails and build contact profiles. It typically takes <strong className="text-neutral-800">3-5 minutes</strong> on the <strong className="text-neutral-800">first</strong> build.
+                </p>
+                <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-amber-800">
+                  <strong>Warning:</strong> If you already have contacts saved, this will overwrite all existing contact data.
+                </div>
+                <p>You can navigate away — the process runs on the server and will complete in the background.</p>
+              </div>
+              <div className="mt-5 flex gap-3 justify-end">
+                <button
+                  onClick={handleInitCancel}
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleInitConfirm}
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-white bg-neutral-900 hover:bg-neutral-800 transition-colors"
+                >
+                  Proceed
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Chat with mode status bar (ULW toggle integrated) */}
         <Chat
           ui={displayUI}
@@ -258,13 +342,13 @@ export default function ChatSessionPage() {
               ulwTurnsRemaining={ulwTurnsRemaining}
               sessionState={sessionState}
               isLoading={isLoading}
-              connectionError={connectionError}
-              onRetry={lastMessage ? () => handleSend(lastMessage) : undefined}
+              connectionError={isInitRunning ? null : connectionError}
+              onRetry={lastMessage && !isInitRunning ? () => handleSend(lastMessage) : undefined}
               onReconnect={handleReconnect}
             />
           }
-          connectionError={connectionError}
-          onRetry={lastMessage ? () => handleSend(lastMessage) : undefined}
+          connectionError={isInitRunning ? null : connectionError}
+          onRetry={lastMessage && !isInitRunning ? () => handleSend(lastMessage) : undefined}
           skills={skills}
         />
       </div>
