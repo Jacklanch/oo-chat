@@ -103,6 +103,9 @@ def do_today() -> str:
     yesterday = (datetime.now(tz=sydney) - timedelta(days=1)).strftime('%Y/%m/%d')
     emails = email.search_emails(query=f"after:{yesterday}", max_results=50)
 
+    if not emails or not emails.strip() or 'no email' in emails.lower() or 'no results' in emails.lower() or 'no messages' in emails.lower():
+        return "📭 No new emails today."
+
     # Replace {emails} placeholder in prompt
     prompt = cmd.prompt.replace("{emails}", emails)
     return _llm_complete(prompt)
@@ -535,7 +538,9 @@ class CommandRouter:
         if text == '/writing_style' or text.startswith('/writing_style '):
             parts = text.split()
             count = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 30
-            return do_writing_style(count=count)
+            result = do_writing_style(count=count)
+            self._set_session(session, prompt, result)
+            return result
 
         # Not a slash command — pass through to the LLM agent
         wrapped = object.__getattribute__(self, '_agent')
