@@ -13,7 +13,7 @@ from agent import agent
 from .core import (
     do_inbox, do_search, do_contacts, do_sync,
     do_init, do_unanswered, do_identity, do_today, do_events, do_weekly_summary,
-    CommandRouter,
+    do_writing_style, CommandRouter
 )
 from .contacts_provider import ContactProvider
 
@@ -184,6 +184,13 @@ def interactive():
     chat.command("/init", lambda _: do_init())
     chat.command("/unanswered", lambda _: do_unanswered())
     chat.command("/identity", lambda _: do_identity())
+
+    def _writing_style(text: str) -> str:
+        parts = text.split()
+        count = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 30
+        return do_writing_style(count=count)
+
+    chat.command("/writing_style", _writing_style)
 
     def _link_gmail(_: str) -> str:
         subprocess.run(['co', 'auth', 'google'])
