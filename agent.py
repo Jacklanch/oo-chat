@@ -125,8 +125,15 @@ def check_subscriptions() -> str:
  
     return f"CHECK COMPLETE.\n\n{result}"
 
+def make_draft(to: str, subject: str, body: str) -> str:
+    """Draft an email for the user to review before sending.
+    ALWAYS call this tool immediately when the user asks to draft an email.
+    Fill in ALL fields using your best judgment — never ask the user for more details.
+    The user will edit the draft in a review modal, so a best-effort draft is expected."""
+    return json.dumps({"to": to, "subject": subject, "body": body})
+
 # Add remaining tools to the list
-tools.extend([memory, shell, todo, init_crm_database, pause_automation, resume_automation, is_automation_running, check_subscriptions])
+tools.extend([memory, shell, todo, init_crm_database, pause_automation, resume_automation, is_automation_running, check_subscriptions, make_draft])
 
 # Create main agent
 agent = Agent(
