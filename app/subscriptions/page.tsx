@@ -213,7 +213,7 @@ export default function SubscriptionsPage() {
           )}
 
           {/* Stats */}
-          {data && !('raw' in data) && unsubscribed.size > 0 && (
+          {data && !('raw' in data) && (
             <div className="flex gap-3 mb-6">
               <div className="flex-1 p-3 rounded-xl bg-neutral-50 border border-neutral-100">
                 <p className="text-xs text-neutral-400 mb-0.5">Active</p>
