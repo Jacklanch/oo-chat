@@ -68,15 +68,34 @@ def _format_inbox_markdown(email_tool, count: int, unread: bool) -> str:
                 'unread': is_unread,
             })
 
+        def sender_name(addr: str) -> str:
+            """Extract display name from 'Name <email>' or return address."""
+            import re
+            m = re.match(r'^"?([^"<]+?)"?\s*<', addr)
+            return m.group(1).strip() if m else addr.split('@')[0]
+
+        def cell(s: str) -> str:
+            """Escape pipe chars so they don't break the table."""
+            return s.replace('|', '\\|')
+
         filter_label = "unread " if unread else ""
-        lines = [f"**Inbox** · {len(emails)} {filter_label}email{'s' if len(emails) != 1 else ''}\n"]
-        for i, e in enumerate(emails, 1):
-            dot = "🔵" if e['unread'] else "⚪"
-            lines.append(f"**{i}.** {dot} **{e['subject']}**")
-            lines.append(f"↳ {e['from']} · {e['date']}")
-            if e['snippet']:
-                lines.append(f"> {e['snippet'][:120]}{'…' if len(e['snippet']) > 120 else ''}")
-            lines.append("")
+        n = len(emails)
+        lines = [
+            f"**Inbox** · {n} {filter_label}email{'s' if n != 1 else ''}",
+            "",
+            "| | From | Subject | Date |",
+            "|:--|:--|:--|--:|",
+        ]
+        for e in emails:
+            dot = "🔵" if e['unread'] else "  "
+            name = cell(sender_name(e['from']))
+            if e['unread']:
+                name = f"**{name}**"
+            subject = cell(e['subject'])
+            raw_snip = e['snippet']
+            snippet = cell(raw_snip[:80] + ('...' if len(raw_snip) > 80 else '')) if raw_snip else ''
+            subj_cell = f"**{subject}**  {snippet}" if e['unread'] else f"{subject}  {snippet}"
+            lines.append(f"| {dot} | {name} | {subj_cell} | {e['date']} |")
         return "\n".join(lines)
     except Exception:
         # Fall back to the default formatting

@@ -5,12 +5,20 @@ tools:
   - Gmail.search_emails
   - Gmail.get_email_body
 ---
-Show emails from my inbox. For each email output exactly this markdown structure:
+Show emails from my inbox as a markdown table, like Gmail's inbox view.
 
-**{N}.** 🔵 **{Subject}** _(🔵 if unread, ⚪ if read)_
-↳ {Sender name and address} · {Short date e.g. Mon 15 Jan}
-> {One-sentence preview or summary of the email body}
+Start with: **Inbox** · {count} email(s)
 
-Start the response with: **Inbox** · {count} email(s)
+Then output this exact table:
 
-Keep previews under 120 characters. Use the real subject line verbatim.
+| | From | Subject | Date |
+|:--|:--|:--|--:|
+| 🔵 | **Sender Name** | **Subject line**  preview snippet | 15 Jan |
+|    | Sender Name | Subject line  preview snippet | 14 Jan |
+
+Rules:
+- 🔵 in the first column if unread, blank if read
+- Sender name only (not the email address), bold if unread
+- Subject bold if unread; append 2 spaces then a short snippet (under 80 chars, ending in ... if truncated) in the same cell
+- Date right-aligned, short format: "15 Jan" or "Mon" if today
+- Use the real subject line verbatim
