@@ -9,12 +9,19 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
 
 
 def main() -> None:
+    timezone_name = os.getenv("AUTOMATION_TIMEZONE", "Australia/Sydney")
+    os.environ["TZ"] = timezone_name
+    if hasattr(time, "tzset"):
+        time.tzset()
+
     # Act like running from the root directory
     os.chdir(_ROOT)
     if str(_ROOT) not in sys.path:
@@ -39,6 +46,24 @@ def main() -> None:
         "attendees": data.get("attendees"),
         "is_video_call": bool(data.get("is_video_call")),
     }
+
+    # Backend fallback: if end_time is missing but date/start_time are present,
+    # default meeting length to 1 hour.
+    if (
+        meeting.get("date")
+        and meeting.get("start_time")
+        and not meeting.get("end_time")
+    ):
+        try:
+            start_dt = datetime.strptime(
+                f"{meeting['date']} {meeting['start_time']}",
+                "%Y-%m-%d %H:%M",
+            )
+            meeting["end_time"] = (start_dt + timedelta(hours=1)).strftime("%H:%M")
+        except Exception:
+            # Keep original value; downstream scheduler will report validation issues.
+            pass
+    
     # "all" because only one event is going to be passed in at a time
     msg = do_create_events([meeting], 'all')
     ok = True

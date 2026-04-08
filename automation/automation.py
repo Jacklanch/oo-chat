@@ -104,7 +104,7 @@ def refresh_writing_style() -> None:
         logger.warning("Could not refresh writing style profile: %s", e)
 
 
-def daily_summary(today_output: str, draft_count: int = 0) -> str:
+def daily_summary(today_output: str, draft_count: int = 0, scheduled_count: int = 0) -> str:
     """
     Daily summary: counts derived from today's briefing plus draft count.
     Returns a short summary line (processed/drafted/scheduled can be extended later).
@@ -140,8 +140,8 @@ def daily_summary(today_output: str, draft_count: int = 0) -> str:
         total = high + medium + low + automated
     processed = total
     drafted = draft_count
-    scheduled = 0  # reserved
-    return (f"{processed} emails processed during scan, {drafted} drafts to review, {scheduled} scheduled")
+    scheduled = scheduled_count 
+    return (f"{processed} emails processed during scan, {drafted} drafts and {scheduled} meetings to review.")
 
 
 def write_briefing_for_frontend(
@@ -429,16 +429,25 @@ def run_once() -> bool:
                 len(fresh_drafts),
                 len(drafts),
             )
-        summary = daily_summary(briefing, len(drafts))
-        
-        _, meetings = do_events(days=int(get_last_scanned_at()), unconfirmed=False)
-        for m in meetings: 
+        last_scanned = get_last_scanned_at()
+        if last_scanned is not None:
+            days_ago = max(1, int((time.time() - last_scanned) // 86400))
+        else:
+            days_ago = 7
+        _, fresh_meetings = do_events(days=days_ago)
+        for m in fresh_meetings:
             m["meeting_id"] = str(uuid.uuid4())
         persisted_meetings = load_persisted_meetings()
-        meetings = merge_meetings_persist(persisted_meetings, meetings)
-        print(meetings)
-        logger.info("Automation run completed: %d messages, %d drafts", n_msg, len(drafts))
-        logger.info("Summary: %s", summary)
+        meetings = merge_meetings_persist(persisted_meetings, fresh_meetings)
+        if len(persisted_meetings) or len(meetings) != len(fresh_meetings):
+            logger.info(
+                "Meetings: %d persisted + %d new from run -> %d total",
+                len(persisted_meetings),
+                len(fresh_meetings),
+                len(meetings),
+            )
+        summary = daily_summary(briefing, len(drafts), len(meetings))
+        logger.info("Automation run completed: %d messages, %d drafts, %d meetings", n_msg, len(drafts), len(meetings))
         write_briefing_for_frontend(
             briefing,
             summary,
