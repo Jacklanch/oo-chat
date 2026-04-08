@@ -14,17 +14,12 @@ import uuid
 from pathlib import Path
 
 from connectonion import SlashCommand
-from agent import agent
+from agent import agent, email_instance
 
 
 def _get_email_tool():
     """Get the first configured email tool (Gmail or Outlook)."""
-    # Access via agent's tool registry
-    if hasattr(agent.tools, 'gmail'):
-        return agent.tools.gmail
-    if hasattr(agent.tools, 'outlook'):
-        return agent.tools.outlook
-    return None
+    return email_instance
 
 
 def _format_inbox_markdown(email_tool, count: int, unread: bool) -> str:
@@ -144,9 +139,74 @@ def do_sync(max_emails: int = 500, exclude: str = "openonion.ai,connectonion.com
     return "Contact syncing not available for this provider."
 
 
-def do_init(max_emails: int = 500, top_n: int = 10, exclude: str = "openonion.ai,connectonion.com") -> str:
-    from agent import init_crm_database
-    return init_crm_database(max_emails=max_emails, top_n=top_n, exclude_domains=exclude)
+import json
+import threading
+from pathlib import Path
+
+_INIT_STATUS_FILE = Path("data/init_status.json")
+
+
+def _write_init_status(status: str, result: str | None = None):
+    """Write init status to a JSON file for polling."""
+    _INIT_STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _INIT_STATUS_FILE.write_text(json.dumps({
+        "status": status,
+        "result": result,
+    }))
+
+
+def _run_init_background(max_emails: int, exclude: str):
+    """Run CRM init in a background thread and save the result to init_status.json"""
+    try:
+        from agent import init_crm_database
+        result = init_crm_database(max_emails=max_emails, exclude_domains=exclude)
+        _write_init_status("completed", result)
+    except Exception as e:
+        _write_init_status("error", str(e))
+
+
+def do_init(max_emails: int = 500, exclude: str = "openonion.ai,connectonion.com") -> str:
+    # prevent /init being called again if already running
+    if _INIT_STATUS_FILE.exists():
+        try:
+            data = json.loads(_INIT_STATUS_FILE.read_text())
+            if data.get("status") == "running":
+                return "CRM initialization is already running. Use /init-status to check progress."
+        except (json.JSONDecodeError, KeyError):
+            pass
+    # update to running
+    _write_init_status("running")
+
+    # start thread to run init
+    thread = threading.Thread(
+        target=_run_init_background,
+        args=(max_emails, exclude),
+        daemon=True,
+    )
+    thread.start()
+
+    return "CRM initialization started. This typically takes 3-5 minutes.\n\nUse /init-status to check progress."
+
+
+def do_init_status() -> str:
+    """Check the status of a CRM initialization run."""
+    if not _INIT_STATUS_FILE.exists():
+        return "No CRM initialization has been run. Use /init to start one."
+    try:
+        data = json.loads(_INIT_STATUS_FILE.read_text())
+    except (json.JSONDecodeError, KeyError):
+        return "Unable to read init status."
+
+    status = data.get("status")
+    result = data.get("result")
+
+    if status == "running":
+        return "CRM initialization is still running. Check back in a minute."
+    elif status == "completed":
+        return result or "CRM initialization completed."
+    elif status == "error":
+        return f"CRM initialization failed: {result}"
+    return f"Issue getting status: {data}"
 
 
 def do_unanswered(days: int = 120, count: int = 20) -> str:
@@ -331,7 +391,7 @@ def generate_reply_drafts(messages: list) -> list:
             f"{i}. messageId={m['id']} | from={m['from']} | subject={m['subject']} | preview={prev}"
         )
     block = "\n".join(lines)
-    _style_path = Path(__file__).resolve().parent.parent / "data" / "writing_style.md"
+    _style_path = Path(__file__).resolve().parent.parent / "data" / "memory" / "writing_style.md"
     try:
         _style_text = _style_path.read_text(encoding="utf-8").strip()
     except OSError:
@@ -874,6 +934,12 @@ class CommandRouter:
         # --- /init ---
         if text == '/init':
             result = do_init()
+            self._set_session(session, prompt, result)
+            return result
+
+        # --- /init-status ---
+        if text == '/init-status':
+            result = do_init_status()
             self._set_session(session, prompt, result)
             return result
 

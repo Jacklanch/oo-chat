@@ -6,19 +6,15 @@ Pattern: Use ConnectOnion email tools + Memory system + Calendar + Shell + Plugi
 """
 
 import json
-import os
-import time
+import os, time
+from connectonion import Agent, WebFetch, Shell, TodoList
+from memory import Memory
 import re
 from pathlib import Path
-
-from connectonion import Agent, Memory, WebFetch, Shell, TodoList
 from connectonion.useful_plugins import gmail_plugin, calendar_plugin
 from connectonion.useful_plugins.re_act import acknowledge_request
 from connectonion.core.events import after_tools
 from automation.automation import pause_automation, resume_automation, is_automation_running
-
-_AGENT_ROOT = Path(__file__).resolve().parent
-
 
 @after_tools
 def reflect(agent) -> None:
@@ -47,7 +43,12 @@ custom_re_act = [acknowledge_request, reflect]
 
 
 # Create shared tool instances
-memory = Memory(memory_file=str(_AGENT_ROOT / "data" / "memory.md"))
+memory = Memory(memory_dir="data/memory")
+read_memory = memory.read_memory
+write_memory = memory.write_memory
+update_memory = memory.update_memory
+list_memories = memory.list_memories
+search_memory = memory.search_memory
 web = WebFetch()  # For analyzing contact domains
 shell = Shell()  # For running shell commands (e.g., get current date)
 todo = TodoList()  # For tracking multi-step tasks
@@ -60,29 +61,33 @@ has_outlook = os.getenv("LINKED_OUTLOOK", "").lower() == "true"
 tools = []
 plugins = [custom_re_act]
 
+# Email/calendar tool instances (full instance kept for CRM agent)
+email_instance = None
+calendar_instance = None
+
 # Prefer Gmail if both are linked (can only use one due to method name conflicts)
 if has_gmail:
     from connectonion import Gmail, GoogleCalendar
-    tools.append(Gmail())
-    tools.append(GoogleCalendar())
+    email_instance = Gmail()
+    calendar_instance = GoogleCalendar()
     plugins.append(gmail_plugin)
     plugins.append(calendar_plugin)
 elif has_outlook:
     from connectonion import Outlook, MicrosoftCalendar
-    tools.append(Outlook())
-    tools.append(MicrosoftCalendar())
+    email_instance = Outlook()
+    calendar_instance = MicrosoftCalendar()
 
 # Warn if no email provider configured
-if not tools:
+if not email_instance:
     print("\n⚠️  No email account connected. Use /link-gmail or /link-outlook to connect.\n")
 
 # Select prompt based on linked provider (Path so cwd does not matter for tests / subprocesses)
 if has_gmail:
-    system_prompt = _AGENT_ROOT / "prompts" / "gmail_agent.md"
+    system_prompt = "prompts/gmail_agent.md"
 elif has_outlook:
-    system_prompt = _AGENT_ROOT / "prompts" / "outlook_agent.md"
+    system_prompt = "prompts/outlook_agent.md"
 else:
-    system_prompt = _AGENT_ROOT / "prompts" / "gmail_agent.md"  # Default
+    system_prompt = "prompts/gmail_agent.md"  # Default
 
 agent_model = "co/gemini-3-flash-preview"
 if "gemini" in agent_model:
@@ -90,45 +95,36 @@ if "gemini" in agent_model:
 else:
     subscription_checker_prompt = "prompts/subscription_checker.md"
 
-# Create init sub-agent for CRM database setup
+# exclude the expensive API calls from the main agent so it stops calling them like an idiot
+# the CRM init agent gets the full email instance, it can do what it likes
+EXCLUDED_EMAIL_METHODS = {
+    "get_all_contacts", "sync_contacts", "analyze_contact", "get_cached_contacts", "update_contact",
+    "bulk_update_contacts", "detect_all_my_emails", "get_all_my_emails",
+    "sync_emails",
+}
+
+if email_instance:
+    for name in dir(email_instance):
+        if name.startswith("_") or name in EXCLUDED_EMAIL_METHODS:
+            continue
+        method = getattr(email_instance, name)
+        if callable(method):
+            tools.append(method)
+
+if calendar_instance:
+    tools.append(calendar_instance)
+
+# Create init sub-agent for CRM database setup (gets full email instance)
+crm_tools = [email_instance] if email_instance else []
 init_crm = Agent(
     name="crm-init",
-    system_prompt=_AGENT_ROOT / "prompts" / "crm_init.md",
-    tools=tools + [memory, web],
+    system_prompt="prompts/crm_init.md",
+    tools=crm_tools + [read_memory, write_memory, update_memory, search_memory, web],
     max_iterations=30,
     model=agent_model,
     log=False  # Don't create separate log file
 )
 
-
-def init_crm_database(max_emails: int = 500, top_n: int = 10, exclude_domains: str = "openonion.ai,connectonion.com") -> str:
-    """Initialize CRM database by extracting and analyzing top contacts.
-
-    Args:
-        max_emails: Number of emails to scan for contacts (default: 500)
-        top_n: Number of top contacts to analyze and save (default: 10)
-        exclude_domains: Comma-separated domains to exclude (your org domains)
-
-    Returns:
-        Summary of initialization process including number of contacts analyzed
-    """
-    result = init_crm.input(
-        f"Initialize CRM: Extract top {top_n} contacts from {max_emails} emails.\n"
-        f"IMPORTANT: Use get_all_contacts(max_emails={max_emails}, exclude_domains=\"{exclude_domains}\")\n"
-        f"Then use AI judgment to categorize and analyze the most important contacts."
-    )
-    # Return clear completion message so main agent knows not to call again
-    return f"CRM INITIALIZATION COMPLETE. Data saved to memory. Use read_memory() to access:\n- crm:all_contacts\n- crm:needs_reply\n- crm:init_report\n- contact:email@example.com\n\nDetails: {result}"
-
-# Create subscription checker sub-agent
-subscription_checker = Agent(
-    name="subscription-checker",
-    system_prompt=subscription_checker_prompt,
-    tools=tools + [memory, shell],
-    max_iterations=30,
-    model=agent_model,
-    log=False,
-)
 SUBSCRIPTIONS_FILE = Path(__file__).resolve().parent / "data" / "subscriptions.json"
 UNSUBSCRIBED_FILE = Path(__file__).resolve().parent / "data" / "unsubscribed.json"
  
@@ -277,7 +273,17 @@ def make_draft(to: str, subject: str, body: str) -> str:
     return json.dumps({"to": to, "subject": subject, "body": body})
 
 # Add remaining tools to the list
-tools.extend([memory, shell, todo, init_crm_database, pause_automation, resume_automation, is_automation_running, check_subscriptions, make_draft])
+tools.extend([read_memory, write_memory, update_memory, search_memory, list_memories, shell, todo, pause_automation, resume_automation, is_automation_running, check_subscriptions, make_draft])
+
+# Create subscription checker sub-agent
+subscription_checker = Agent(
+    name="subscription-checker",
+    system_prompt=subscription_checker_prompt,
+    tools=tools,
+    max_iterations=30,
+    model=agent_model,
+    log=False,
+)
 
 # Create main agent
 agent = Agent(
@@ -289,20 +295,74 @@ agent = Agent(
     model=agent_model,
 )
 
-# Example usage
-if __name__ == "__main__":
-    print("=== Email Agent ===\n")
+def init_crm_database(max_emails: int = 500, exclude_domains: str = "openonion.ai,connectonion.com") -> str:
+    """Initialize CRM database by extracting contacts.
 
-    # Example 1: Initialize CRM database using wrapper function
-    print("1. Initialize CRM database...")
-    result = agent.input(
-        "Initialize the CRM database with top 5 contacts from recent 500 emails"
-    )
-    print(result)
+    Args:
+        max_emails: Number of emails to scan for contacts (default: 500)
+        exclude_domains: Comma-separated domains to exclude (your org domains)
 
-    print("\n" + "="*50 + "\n")
+    Returns:
+        Summary of initialization process including number of contacts analyzed
+    """
 
-    # Example 2: Query from MEMORY (should NOT re-fetch from API)
-    print("2. Query from memory (should be fast)...")
-    result = agent.input("Who do I email the most? Check memory first.")
-    print(result)
+    start = time.perf_counter()
+    from pathlib import Path
+    contacts_csv = Path("data/contacts.csv")
+    contacts_dir = Path("data/memory/contacts")
+
+    if contacts_csv.exists():
+        csv_content = contacts_csv.read_text()
+        result = init_crm.input(
+            f"Initialize CRM: contacts.csv already exists. Create contact files from the CSV data below.\n"
+            f"DO NOT call get_all_contacts(). The data is already here.\n"
+            f"Use AI judgment to only create files for real, important people.\n\n"
+            f"--- contacts.csv ---\n{csv_content}"
+        )
+    else:
+        result = init_crm.input(
+            f"Initialize CRM: Extract contacts from up to {max_emails} latest emails.\n"
+            f"IMPORTANT: Use get_all_contacts(max_emails={max_emails}, exclude_domains=\"{exclude_domains}\")\n"
+            f"Then use AI judgment to only setup the most useful and important contacts."
+        )
+
+    for contact_file in sorted(contacts_dir.glob("*.md")):
+        email = contact_file.stem
+        init_crm.input(f"""Enrich the contact file for {email}.
+
+1. read_memory("contact:{email}") — see what's already saved
+2. search_emails("from:{email}", 15) — emails received from them
+3. search_emails("to:{email}", 15) — emails you sent to them
+4. get_email_body() on 2-3 of the most informative ones (skip receipts, calendar invites, one-liners)
+5. update_memory("contact:{email}", ...) with this structure:
+---
+name: <full name>
+company: <their company if known>
+role: <their job title or function if known>
+relationship: <one of: client, colleague, family, friend, contact>
+priority: <high / medium / low — based on email frequency and importance>
+tags: [<relevant keywords>]
+---
+
+## About
+2-3 sentences: who they are, how you know them, nature of the relationship.
+
+## Key Topics
+Bullet list of recurring subjects or projects discussed.
+
+## Language
+Brief summary of the tone and language used between this contact and the user
+
+## Thread History
+Dated bullet list of notable interactions (most recent first):
+- YYYY-MM-DD: <what happened>
+
+If there are zero emails from and to this contact, just add a note:
+"No email history found."
+
+Use update_memory (not write_memory) to preserve existing frontmatter fields.
+Only include fields you can actually infer — don't fabricate details."""
+)
+    end = time.perf_counter()
+    # Return clear completion message so main agent knows not to call again
+    return f"CRM INITIALIZATION COMPLETE in {end - start:.2f} seconds. \n{result}\nContacts saved to memory/contacts, to browse contacts use list_memories('contacts')"
