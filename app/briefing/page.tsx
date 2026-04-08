@@ -80,7 +80,7 @@ function legacyBriefingPlainText(o: object): string {
 }
 
 function briefingSectionsForDisplay(d: BriefingData): BriefingSection[] {
-  if (d.briefingSections.length > 0) {
+  if (d.briefingSections && d.briefingSections.length > 0) {
     return d.briefingSections
   }
   return parseBriefingSections(legacyBriefingPlainText(d))
@@ -516,7 +516,7 @@ export default function BriefingPage() {
                               const mid = m.meeting_id ?? ''
                               const meetSt = meetingState[mid]?.status ?? 'idle'
                               const meetMsg = meetingState[mid]?.message
-                              const canAdd = Boolean(m.date && m.start_time && mid && m.end_time)
+                              const canAdd = Boolean(m.date && m.start_time && mid)
 
                               return (
                                 <div className="shrink-0">

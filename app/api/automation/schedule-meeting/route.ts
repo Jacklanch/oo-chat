@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
     }
     if (!meeting.date || !meeting.start_time) {
         return NextResponse.json(
-            { ok: false, error: 'Meeting must include date, start_time, and end_time' },
+            { ok: false, error: 'Meeting must include date and start_time' },
             { status: 400 }
         )
     }
