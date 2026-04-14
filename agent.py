@@ -172,8 +172,6 @@ subscription_checker = Agent(
     log=False,
 )
 
-tools.append(make_draft)
-
 # Create main agent
 agent = Agent(
     name="email-agent",
