@@ -551,9 +551,13 @@ def do_events(days: int = 7, max_emails: int = 50) -> tuple:
         msg = "No email account connected. Use /link-gmail or /link-outlook to connect."
         return msg, []
 
-    # Search emails from the last N days that likely mention dates/times
-    now = dt.now(tz=aedt)
-    since = (now - timedelta(days=days)).strftime('%Y/%m/%d')
+    # Checking if days is UNIX timestamp or days amount
+    since = days
+    if days < 1000000000:
+        # Search emails from the last N days that likely mention dates/times
+        now = dt.now(tz=aedt)
+        since = (now - timedelta(days=days)).strftime('%Y/%m/%d')
+    
     year_terms = " OR ".join(
         f'"/{y}" OR "{y}"' for y in range(now.year, now.year + 3)
     )
