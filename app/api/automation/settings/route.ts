@@ -19,6 +19,17 @@ const CONFIG_PATH_SEGMENTS = [
 function getConfigPathCandidates(): string[] {
   if (process.env.AUTOMATION_CONFIG_PATH) return [process.env.AUTOMATION_CONFIG_PATH]
   const paths: string[] = []
+  const agentProjectPath = process.env.AGENT_PROJECT_PATH?.trim()
+  const capstoneRoot = process.env.CAPSTONE_ROOT?.trim()
+
+  // Prefer explicit env roots first so container working directories do not break lookup.
+  for (const root of [agentProjectPath, capstoneRoot]) {
+    if (!root) continue
+    for (const rel of CONFIG_PATH_SEGMENTS) {
+      paths.push(join(root, rel))
+    }
+  }
+
   for (const root of capstoneRootCandidatesFromCwd()) {
     for (const rel of CONFIG_PATH_SEGMENTS) {
       paths.push(join(root, rel))
