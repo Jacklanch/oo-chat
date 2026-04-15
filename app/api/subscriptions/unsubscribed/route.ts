@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
-import { join } from 'path'
+import { agentDataJsonCandidates } from '@/lib/capstone-paths'
 
-const AGENT_PROJECT_PATH = process.env.AGENT_PROJECT_PATH || join(process.cwd(), '..', 'capstone-project-26t1-3900-w18a-date')
-const UNSUBSCRIBED_FILE = join(AGENT_PROJECT_PATH, 'data', 'unsubscribed.json')
+function unsubscribedPathCandidates(): string[] {
+  return agentDataJsonCandidates('unsubscribed.json')
+}
+
+function resolveUnsubscribedFile(): string {
+  const candidates = unsubscribedPathCandidates()
+  return candidates.find((p) => existsSync(p)) ?? candidates[0]
+}
 
 interface UnsubscribedEntry {
   sender_name: string
@@ -13,6 +19,7 @@ interface UnsubscribedEntry {
 }
 
 function readUnsubscribed(): UnsubscribedEntry[] {
+  const UNSUBSCRIBED_FILE = resolveUnsubscribedFile()
   if (!existsSync(UNSUBSCRIBED_FILE)) return []
   try {
     const content = readFileSync(UNSUBSCRIBED_FILE, 'utf-8')
@@ -23,6 +30,7 @@ function readUnsubscribed(): UnsubscribedEntry[] {
 }
 
 function writeUnsubscribed(entries: UnsubscribedEntry[]) {
+  const UNSUBSCRIBED_FILE = resolveUnsubscribedFile()
   writeFileSync(UNSUBSCRIBED_FILE, JSON.stringify(entries, null, 2), 'utf-8')
 }
 

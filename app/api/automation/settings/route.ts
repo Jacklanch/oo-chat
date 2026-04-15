@@ -8,16 +8,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { join, dirname } from 'path'
 import { readFile, writeFile, mkdir } from 'fs/promises'
+import { capstoneRootCandidatesFromCwd, uniqueOrderedPaths } from '@/lib/capstone-paths'
 
-const RELATIVE_CONFIG = join('capstone-project-26t1-3900-w18a-date', 'automation', 'automation_config.json')
+/** Post-merge config lives under agent/; older trees had it at repo automation/. */
+const CONFIG_PATH_SEGMENTS = [
+  join('agent', 'automation', 'automation_config.json'),
+  join('automation', 'automation_config.json'),
+]
 
 function getConfigPathCandidates(): string[] {
   if (process.env.AUTOMATION_CONFIG_PATH) return [process.env.AUTOMATION_CONFIG_PATH]
-  const cwd = process.cwd()
-  return [
-    join(cwd, '..', RELATIVE_CONFIG),
-    join(cwd, RELATIVE_CONFIG),
-  ]
+  const paths: string[] = []
+  for (const root of capstoneRootCandidatesFromCwd()) {
+    for (const rel of CONFIG_PATH_SEGMENTS) {
+      paths.push(join(root, rel))
+    }
+  }
+  return uniqueOrderedPaths(paths)
 }
 
 export interface AutomationSettings {

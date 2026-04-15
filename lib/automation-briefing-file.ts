@@ -1,29 +1,36 @@
 import { join, dirname } from 'path'
 import { readFile, writeFile, mkdir } from 'fs/promises'
-import { MeetingProposal } from '@/app/api/automation/briefing/route'
+import { capstoneRootCandidatesFromCwd, uniqueOrderedPaths } from '@/lib/capstone-paths'
 
-const CAPSTONE_DIR = 'capstone-project-26t1-3900-w18a-date'
-/** Path from capstone repo root to the briefing JSON (matches Python `briefing_file_path`). */
-const BRIEFING_UNDER_CAPSTONE = join('automation', 'data', 'automation_briefing.json')
-const RELATIVE_PATH = join(CAPSTONE_DIR, BRIEFING_UNDER_CAPSTONE)
+/** Under monorepo root (sibling of `oo-chat/`). */
+const BRIEFING_UNDER_AGENT_TREE = join('agent', 'automation', 'data', 'automation_briefing.json')
+/** Older layout: automation at repo root. */
+const BRIEFING_UNDER_REPO_ROOT = join('automation', 'data', 'automation_briefing.json')
+
+function briefingPathsUnderRepoRoot(repoRoot: string): string[] {
+  return [join(repoRoot, BRIEFING_UNDER_AGENT_TREE), join(repoRoot, BRIEFING_UNDER_REPO_ROOT)]
+}
 
 /**
  * Paths to automation_briefing.json, in try order.
  * 1. BRIEFING_FILE_PATH — explicit file override
- * 2. CAPSTONE_ROOT/automation/data/automation_briefing.json — when CAPSTONE_ROOT is set
- * 3. Sibling guesses from cwd (../capstone… or ./capstone…)
+ * 2. Paths under CAPSTONE_ROOT when set (repo root or `agent/` root)
+ * 3. Repo root guesses (parent of `oo-chat/`, then legacy sibling clone layout)
  */
 export function getBriefingFileCandidates(): string[] {
   const explicit = process.env.BRIEFING_FILE_PATH?.trim()
   if (explicit) {
     return [explicit]
   }
+  const paths: string[] = []
   const capstoneRoot = process.env.CAPSTONE_ROOT?.trim()
   if (capstoneRoot) {
-    return [join(capstoneRoot, BRIEFING_UNDER_CAPSTONE)]
+    paths.push(...briefingPathsUnderRepoRoot(capstoneRoot))
   }
-  const cwd = process.cwd()
-  return [join(cwd, '..', RELATIVE_PATH), join(cwd, RELATIVE_PATH)]
+  for (const root of capstoneRootCandidatesFromCwd()) {
+    paths.push(...briefingPathsUnderRepoRoot(root))
+  }
+  return uniqueOrderedPaths(paths)
 }
 
 type BriefingJson = Record<string, unknown> & { drafts?: unknown[] }

@@ -1,18 +1,19 @@
 import { NextResponse } from 'next/server'
 import { readFileSync, existsSync } from 'fs'
-import { join } from 'path'
+import { agentDataJsonCandidates } from '@/lib/capstone-paths'
 
-// Relative path: assumes frontend and agent repos are in the same parent folder
-// Override with AGENT_PROJECT_PATH env var if needed
-const AGENT_PROJECT_PATH = process.env.AGENT_PROJECT_PATH || join(process.cwd(), '..', 'capstone-project-26t1-3900-w18a-date')
-const SUBSCRIPTIONS_FILE = join(AGENT_PROJECT_PATH, 'data', 'subscriptions.json')
+function subscriptionsFileCandidates(): string[] {
+  return agentDataJsonCandidates('subscriptions.json')
+}
 
 export async function GET() {
   try {
-    console.log('Looking for file at:', SUBSCRIPTIONS_FILE)
-    console.log('File exists:', existsSync(SUBSCRIPTIONS_FILE))
+    const candidates = subscriptionsFileCandidates()
+    const SUBSCRIPTIONS_FILE = candidates.find((p) => existsSync(p))
+    console.log('Subscription file candidates:', candidates)
+    console.log('Using:', SUBSCRIPTIONS_FILE ?? '(none)')
     console.log('cwd:', process.cwd())
-    if (!existsSync(SUBSCRIPTIONS_FILE)) {
+    if (!SUBSCRIPTIONS_FILE) {
       return NextResponse.json(
         { error: 'No subscription data found. Run "check subscriptions" in the chat first.' },
         { status: 404 }
