@@ -119,6 +119,10 @@ export interface PendingUlwTurnsReached {
   max_turns: number
 }
 
+export interface PendingPlanReview {
+  plan_content: string
+}
+
 // UI types (matches ConnectOnion SDK: connectonion-ts/src/connect.ts)
 export type UIType = 'user' | 'agent' | 'thinking' | 'tool_call' | 'ask_user' | 'approval_needed' | 'onboard_required' | 'onboard_success' | 'intent' | 'eval' | 'compact' | 'tool_blocked' | 'ulw_turns_reached'
 
