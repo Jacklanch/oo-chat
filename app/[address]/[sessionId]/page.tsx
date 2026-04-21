@@ -60,11 +60,10 @@ const SLASH_COMMANDS = [
   { id: '/inbox',      prefix: '📥', label: 'Show recent emails [n]' },
   { id: '/search',     prefix: '🔍', label: 'Search emails <query>' },
   { id: '/unanswered', prefix: '⏳', label: 'Find emails pending your reply' },
-  { id: '/contacts',   prefix: '👥', label: 'View your contacts' },
-  { id: '/sync',       prefix: '🔄', label: 'Sync contacts from Gmail' },
-  { id: '/init',       prefix: '🗄️', label: 'Initialise CRM database' },
-  { id: '/identity',      prefix: '🆔', label: 'Show your email identity' },
-  { id: '/writing_style', prefix: '✍️', label: 'Analyse your writing style [n]' },
+  { id: '/contacts',    prefix: '👥', label: 'View your contacts' },
+  { id: '/init',        prefix: '🗄️', label: 'Initialise CRM database' },
+  { id: '/init-status', prefix: '🗄️', label: 'Check CRM initialisation progress' },
+  { id: '/identity',    prefix: '🆔', label: 'Show your email identity' },
 ]
 
 export default function ChatSessionPage() {
