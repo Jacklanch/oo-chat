@@ -20,7 +20,12 @@ export interface MeetingProposal {
   location?: string
   attendees?: string
   is_video_call?: boolean
+  send_invite?: boolean
   meeting_id?: string
+  messageId?: string
+  originalEmail?: string
+  from?: string
+  subject?: string
 }
 
 export interface BriefingData {
