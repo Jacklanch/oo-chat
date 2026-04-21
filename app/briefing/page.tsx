@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { HiOutlineCalendar, HiOutlineCheckCircle, HiOutlineChevronDown, HiOutlineClock, HiOutlineLightningBolt, HiOutlineLocationMarker, HiOutlinePencil, HiOutlineRefresh, HiOutlineReply, HiOutlineTrash, HiOutlineUsers, HiOutlineVideoCamera } from 'react-icons/hi'
+import { HiOutlineCalendar, HiOutlineMinusCircle, HiOutlineExclamationCircle, HiOutlineChevronDown, HiCog, HiOutlineClock, HiOutlineQuestionMarkCircle, HiOutlineLightningBolt, HiOutlineLocationMarker, HiOutlinePencil, HiOutlineRefresh, HiOutlineReply, HiOutlineTrash, HiOutlineUsers, HiOutlineVideoCamera } from 'react-icons/hi'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ChatLayout } from '@/components/chat-layout'
@@ -520,18 +520,7 @@ export default function BriefingPage() {
     <ChatLayout>
       <div className="flex-1 overflow-auto">
         <div className="max-w-3xl mx-auto px-4 py-8">
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-2xl font-bold text-neutral-900">Your Assistant</h1>
-            <button
-              onClick={runAutomation}
-              disabled={runningAutomation}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              title="Run automation and refresh"
-            >
-              <HiOutlineRefresh className={`w-3.5 h-3.5 ${runningAutomation ? 'animate-spin' : ''}`} />
-              {runningAutomation ? 'Running…' : 'Refresh'}
-            </button>
-          </div>
+          <h1 className="text-2xl font-bold text-neutral-900 mb-1">Your Assistant</h1>
           <p className="text-sm text-neutral-500 mb-6">
             Scanning your inbox daily to find proposed meetings, generate reply drafts and prioritise emails.
           </p>
@@ -550,7 +539,19 @@ export default function BriefingPage() {
             <>
               <div className="text-xs text-neutral-400 mb-4 space-y-0.5">
                 {scanFrom && scanTo && (
-                  <p>Last inbox scan: {scanFrom} → {scanTo}</p>
+                  <p className="flex items-center gap-1.5">
+                    <span>Last inbox scan: {scanFrom} → {scanTo}</span>
+                    <button
+                      type="button"
+                      onClick={runAutomation}
+                      disabled={runningAutomation}
+                      className="p-0.5 rounded text-neutral-400 hover:text-neutral-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      title={runningAutomation ? 'Running automation…' : 'Run automation and refresh'}
+                      aria-label={runningAutomation ? 'Running automation' : 'Run automation and refresh'}
+                    >
+                      <HiOutlineRefresh className={`w-3.5 h-3.5 ${runningAutomation ? 'animate-spin' : ''}`} />
+                    </button>
+                  </p>
                 )}
               </div>
 
@@ -603,9 +604,9 @@ export default function BriefingPage() {
                                 <h3 className="flex items-start gap-2 text-base font-semibold text-neutral-900 mb-2.5 tracking-tight">
                                   {(() => {
                                     const p = briefingSectionTitlePriority(sec.title)
-                                    if (p === 'high') return <HiOutlineLightningBolt className="w-5 h-5 shrink-0 text-red-500 mt-0.5" aria-hidden />
-                                    if (p === 'medium') return <HiOutlineClock className="w-5 h-5 shrink-0 text-amber-500 mt-0.5" aria-hidden />
-                                    if (p === 'low') return <HiOutlineCheckCircle className="w-5 h-5 shrink-0 text-emerald-500 mt-0.5" aria-hidden />
+                                    if (p === 'high') return <HiOutlineExclamationCircle className="w-5 h-5 shrink-0 text-red-500 mt-0.5" aria-hidden />
+                                    if (p === 'medium') return <HiOutlineQuestionMarkCircle className="w-5 h-5 shrink-0 text-amber-500 mt-0.5" aria-hidden />
+                                    if (p === 'low') return <HiOutlineMinusCircle className="w-5 h-5 shrink-0 text-emerald-500 mt-0.5" aria-hidden />
                                     return null
                                   })()}
                                   <span className="min-w-0">{sec.title}</span>
