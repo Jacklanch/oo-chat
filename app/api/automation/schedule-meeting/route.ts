@@ -12,16 +12,15 @@ import { access } from 'fs/promises'
 
 import { removeMeetingFromBriefingFile } from '@/lib/automation-briefing-file'
 import type { MeetingProposal } from '../briefing/route'
+import { agentRootCandidatesFromCwd, uniqueOrderedPaths } from '@/lib/capstone-paths'
 
-const RELATIVE_CAPSTONE = 'capstone-project-26t1-3900-w18a-date'
-
-// Gets possible paths to the root of the frontend
+// Python cwd: directory that contains automation/ (the merged agent/ tree).
 function capstoneRoots(): string[] {
-    if (process.env.CAPSTONE_ROOT?.trim()) {
-        return [process.env.CAPSTONE_ROOT.trim()]
+    const env = process.env.CAPSTONE_ROOT?.trim()
+    if (env) {
+        return uniqueOrderedPaths([env, join(env, 'agent')])
     }
-    const cwd = process.cwd()
-    return [join(cwd, '..', RELATIVE_CAPSTONE), join(cwd, RELATIVE_CAPSTONE)]
+    return agentRootCandidatesFromCwd()
 }
 
 // Gets the path to the python executable

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "npm install --install-links && next dev",
+    "dev": "npm install --install-links --include=optional && next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -27,6 +27,16 @@
     "tailwind-merge": "^3.4.0",
     "tweetnacl": "^1.0.3",
     "zustand": "^5.0.10"
+  },
+  "optionalDependencies": {
+    "@tailwindcss/oxide-darwin-arm64": "4.1.18",
+    "@tailwindcss/oxide-darwin-x64": "4.1.18",
+    "@tailwindcss/oxide-linux-arm64-gnu": "4.1.18",
+    "@tailwindcss/oxide-linux-x64-gnu": "4.1.18",
+    "lightningcss-darwin-arm64": "1.30.2",
+    "lightningcss-darwin-x64": "1.30.2",
+    "lightningcss-linux-arm64-gnu": "1.30.2",
+    "lightningcss-linux-x64-gnu": "1.30.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

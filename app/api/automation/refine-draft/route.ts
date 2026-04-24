@@ -8,15 +8,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { join } from 'path'
 import { spawn } from 'child_process'
 import { access } from 'fs/promises'
-
-const RELATIVE_CAPSTONE = 'capstone-project-26t1-3900-w18a-date'
+import { agentRootCandidatesFromCwd, uniqueOrderedPaths } from '@/lib/capstone-paths'
 
 function capstoneRoots(): string[] {
-  if (process.env.CAPSTONE_ROOT?.trim()) {
-    return [process.env.CAPSTONE_ROOT.trim()]
+  const env = process.env.CAPSTONE_ROOT?.trim()
+  if (env) {
+    return uniqueOrderedPaths([env, join(env, 'agent')])
   }
-  const cwd = process.cwd()
-  return [join(cwd, '..', RELATIVE_CAPSTONE), join(cwd, RELATIVE_CAPSTONE)]
+  return agentRootCandidatesFromCwd()
 }
 
 function parseJsonFromOutput(output: string): Record<string, unknown> | null {
@@ -87,7 +86,7 @@ async function refineViaPython(payload: Record<string, unknown>): Promise<Record
   }
   return {
     ok: false,
-    error: 'Could not run refine_draft.py. Set CAPSTONE_ROOT so oo-chat can find the capstone project.',
+    error: 'Could not run refine_draft.py. Set CAPSTONE_ROOT to your capstone repo root if scripts are not found.',
   }
 }
 

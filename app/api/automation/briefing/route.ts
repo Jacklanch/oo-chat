@@ -1,7 +1,7 @@
 /**
  * GET /api/automation/briefing - Latest daily automation result for the frontend.
  *
- * Reads automation_briefing.json via getBriefingFileCandidates() (BRIEFING_FILE_PATH, or CAPSTONE_ROOT + relative path, or sibling cwd guesses).
+ * Reads automation_briefing.json via getBriefingFileCandidates() (env overrides, then repo-root guesses for merged `frontend/` layout).
  */
 
 import { NextResponse } from 'next/server'
@@ -31,6 +31,7 @@ export interface MeetingProposal {
   attendees?: string
   is_video_call?: boolean
   meeting_id?: string
+  originalEmail?: string
 }
 
 export interface BriefingPayload {
